@@ -1,0 +1,813 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS — USERS
+// ======================================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// ======================================================
+// ENUMS — LISTINGS
+// ======================================================
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  SOLD
+  ARCHIVED
+  REJECTED
+  DELETED
+}
+
+// ======================================================
+// ENUMS — MODERATION
+// ======================================================
+
+enum ReportReason {
+  SPAM
+  FRAUD
+  INAPPROPRIATE_CONTENT
+  FAKE_PROFILE
+  FAKE_LISTING
+  HARASSMENT
+  DUPLICATE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  REJECTED
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+  DELETED
+}
+
+// ======================================================
+// ENUMS — COMMUNICATION
+// ======================================================
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  BLOCKED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+enum NotificationType {
+  ACCOUNT
+  LISTING
+  FAVORITE
+  REVIEW
+  MESSAGE
+  REPORT
+  BOOST
+  AMBASSADOR
+  REFERRAL
+  PAYOUT
+  SYSTEM
+}
+
+// ======================================================
+// ENUMS — BUSINESS
+// ======================================================
+
+enum BoostStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum AmbassadorStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum ReferralStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+// ======================================================
+// ENUMS — AI
+// ======================================================
+
+enum AIFeature {
+  DESCRIPTION_GENERATION
+  IMAGE_ENHANCEMENT
+  FACE_BLUR
+  PROFILE_QUALITY_SCORE
+}
+
+enum AIRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ======================================================
+// TABLES DE RÉFÉRENCE
+// ======================================================
+
+model Language {
+  id         String  @id @default(cuid())
+  name       String
+  code       String  @unique
+  nativeName String
+  isActive   Boolean @default(true)
+
+  profiles Profile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model Currency {
+  id       String  @id @default(cuid())
+  name     String
+  code     String  @unique
+  symbol   String
+  isActive Boolean @default(true)
+
+  listings    Listing[]
+  boosts      Boost[]
+  commissions Commission[]
+  payouts     Payout[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model City {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  profiles Profile[]
+  listings Listing[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ======================================================
+// UTILISATEURS ET AUTHENTIFICATION
+// ======================================================
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  role         UserRole   @default(USER)
+  status       UserStatus @default(PENDING_VERIFICATION)
+
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  deletedAt       DateTime?
+
+  profile  Profile?
+  settings UserSettings?
+
+  verificationTokens VerificationToken[]
+  listings           Listing[]
+  favorites          Favorite[]
+
+  reviewsWritten  Review[] @relation("ReviewsWritten")
+  reviewsReceived Review[] @relation("ReviewsReceived")
+
+  reportsCreated  Report[] @relation("ReportsCreated")
+  reportsReceived Report[] @relation("ReportsReceived")
+
+  buyerConversations  Conversation[] @relation("BuyerConversations")
+  sellerConversations Conversation[] @relation("SellerConversations")
+  messages            Message[]
+
+  notifications Notification[]
+  contactClicks ContactClick[]
+
+  ambassador Ambassador?
+  referrals  Referral[]  @relation("ReferredUsers")
+
+  aiRequests AIRequest[]
+  aiUsage    AIUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([role])
+  @@index([createdAt])
+}
+
+model Profile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  displayName String
+  avatarUrl   String?
+  description String?
+
+  phone     String?
+  whatsapp  String?
+  telegram  String?
+  instagram String?
+
+  cityId     String?
+  languageId String?
+
+  profileQualityScore Int?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city     City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  language Language? @relation(fields: [languageId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cityId])
+  @@index([languageId])
+  @@index([displayName])
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  showPhone     Boolean @default(true)
+  showWhatsapp  Boolean @default(true)
+  showTelegram  Boolean @default(true)
+  showInstagram Boolean @default(true)
+
+  emailNotifications Boolean @default(true)
+  pushNotifications  Boolean @default(true)
+
+  automaticFaceBlur Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  id     String @id @default(cuid())
+  userId String
+
+  token     String                @unique
+  type      VerificationTokenType
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([expiresAt])
+}
+
+// ======================================================
+// CATÉGORIES
+// ======================================================
+
+model Category {
+  id String @id @default(cuid())
+
+  name        String
+  slug        String  @unique
+  description String?
+  icon        String?
+
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+
+  listings Listing[]
+
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([isActive])
+  @@index([displayOrder])
+}
+
+// ======================================================
+// ANNONCES
+// ======================================================
+
+model Listing {
+  id String @id @default(cuid())
+
+  userId     String
+  categoryId String
+  cityId     String
+  currencyId String
+
+  title       String
+  description String
+  price       Decimal @db.Decimal(12, 2)
+
+  status       ListingStatus @default(DRAFT)
+  availableNow Boolean       @default(true)
+
+  allowPhone     Boolean @default(true)
+  allowWhatsapp  Boolean @default(true)
+  allowTelegram  Boolean @default(true)
+  allowInstagram Boolean @default(true)
+
+  automaticFaceBlur Boolean @default(false)
+
+  viewCount Int @default(0)
+
+  publishedAt DateTime?
+  soldAt      DateTime?
+  archivedAt  DateTime?
+  deletedAt   DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+  city     City     @relation(fields: [cityId], references: [id])
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  images        ListingImage[]
+  favorites     Favorite[]
+  reviews       Review[]
+  reports       Report[]
+  conversations Conversation[]
+  contactClicks ContactClick[]
+  boosts        Boost[]
+  aiRequests    AIRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([cityId])
+  @@index([currencyId])
+  @@index([status])
+  @@index([availableNow])
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@index([price])
+}
+
+model ListingImage {
+  id        String @id @default(cuid())
+  listingId String
+
+  url       String
+  publicId  String?
+  position  Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  faceBlurRequested Boolean @default(false)
+  faceBlurApplied   Boolean @default(false)
+
+  originalUrl String?
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, position])
+  @@index([listingId])
+  @@index([listingId, isPrimary])
+}
+
+// ======================================================
+// FAVORIS, AVIS ET SIGNALEMENTS
+// ======================================================
+
+model Favorite {
+  id        String @id @default(cuid())
+  userId    String
+  listingId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, listingId])
+  @@index([listingId])
+}
+
+model Review {
+  id String @id @default(cuid())
+
+  reviewerId     String
+  reviewedUserId String
+  listingId      String?
+
+  rating  Int
+  comment String?
+  status  ReviewStatus @default(PUBLISHED)
+
+  reviewer     User     @relation("ReviewsWritten", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewedUser User     @relation("ReviewsReceived", fields: [reviewedUserId], references: [id], onDelete: Cascade)
+  listing      Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([reviewerId, reviewedUserId, listingId])
+  @@index([reviewedUserId])
+  @@index([listingId])
+  @@index([status])
+}
+
+model Report {
+  id String @id @default(cuid())
+
+  reporterId     String
+  listingId      String?
+  reportedUserId String?
+
+  reason  ReportReason
+  details String?
+  status  ReportStatus @default(PENDING)
+
+  adminNote  String?
+  resolvedAt DateTime?
+
+  reporter     User     @relation("ReportsCreated", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User?    @relation("ReportsReceived", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  listing      Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([listingId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ContactClick {
+  id String @id @default(cuid())
+
+  userId    String?
+  listingId String
+
+  method String
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([listingId])
+  @@index([method])
+  @@index([createdAt])
+}
+
+// ======================================================
+// CHAT — DÉSACTIVÉ AU LANCEMENT
+// ======================================================
+
+model Conversation {
+  id String @id @default(cuid())
+
+  listingId String
+  buyerId   String
+  sellerId  String
+
+  status ConversationStatus @default(ACTIVE)
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer   User    @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller  User    @relation("SellerConversations", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  messages Message[]
+
+  lastMessageAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, buyerId, sellerId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id String @id @default(cuid())
+
+  conversationId String
+  senderId       String
+
+  type     MessageType @default(TEXT)
+  content  String
+  imageUrl String?
+
+  readAt    DateTime?
+  deletedAt DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([readAt])
+}
+
+// ======================================================
+// NOTIFICATIONS — DÉSACTIVÉES AU LANCEMENT
+// ======================================================
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+
+  type    NotificationType
+  title   String
+  message String
+  data    Json?
+
+  readAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ======================================================
+// BOOST — DÉSACTIVÉ AU LANCEMENT
+// ======================================================
+
+model Boost {
+  id String @id @default(cuid())
+
+  listingId  String
+  currencyId String
+
+  amount Decimal     @db.Decimal(12, 2)
+  status BoostStatus @default(PENDING)
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  listing  Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId])
+  @@index([status])
+  @@index([startsAt, endsAt])
+}
+
+// ======================================================
+// AMBASSADEURS ET PARRAINAGE — DÉSACTIVÉS AU LANCEMENT
+// ======================================================
+
+model Ambassador {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  referralCode String           @unique
+  status       AmbassadorStatus @default(PENDING)
+
+  approvedAt  DateTime?
+  suspendedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  referrals   Referral[]
+  commissions Commission[]
+  payouts     Payout[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Referral {
+  id String @id @default(cuid())
+
+  ambassadorId   String
+  referredUserId String @unique
+
+  status      ReferralStatus @default(PENDING)
+  validatedAt DateTime?
+
+  ambassador   Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  referredUser User       @relation("ReferredUsers", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  commissions Commission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ambassadorId])
+  @@index([status])
+}
+
+model Commission {
+  id String @id @default(cuid())
+
+  ambassadorId String
+  referralId   String?
+  currencyId   String
+
+  amount Decimal          @db.Decimal(12, 2)
+  status CommissionStatus @default(PENDING)
+
+  description String?
+  approvedAt  DateTime?
+  paidAt      DateTime?
+
+  ambassador Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  referral   Referral?  @relation(fields: [referralId], references: [id], onDelete: SetNull)
+  currency   Currency   @relation(fields: [currencyId], references: [id])
+
+  payoutItems PayoutItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ambassadorId])
+  @@index([referralId])
+  @@index([status])
+}
+
+model Payout {
+  id String @id @default(cuid())
+
+  ambassadorId String
+  currencyId   String
+
+  amount Decimal      @db.Decimal(12, 2)
+  status PayoutStatus @default(PENDING)
+
+  paymentMethod    String?
+  paymentReference String?
+
+  requestedAt   DateTime  @default(now())
+  processedAt   DateTime?
+  paidAt        DateTime?
+  failureReason String?
+
+  ambassador Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
+  currency   Currency   @relation(fields: [currencyId], references: [id])
+
+  items PayoutItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ambassadorId])
+  @@index([status])
+  @@index([requestedAt])
+}
+
+model PayoutItem {
+  id String @id @default(cuid())
+
+  payoutId     String
+  commissionId String @unique
+
+  payout     Payout     @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  commission Commission @relation(fields: [commissionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([payoutId, commissionId])
+  @@index([payoutId])
+}
+
+// ======================================================
+// INTELLIGENCE ARTIFICIELLE — DÉSACTIVÉE AU LANCEMENT
+// ======================================================
+
+model AIRequest {
+  id String @id @default(cuid())
+
+  userId    String
+  listingId String?
+
+  feature AIFeature
+  status  AIRequestStatus @default(PENDING)
+
+  inputData  Json?
+  outputData Json?
+
+  errorMessage String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([listingId])
+  @@index([feature])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AIUsage {
+  id String @id @default(cuid())
+
+  userId String
+
+  feature AIFeature
+
+  requestCount Int @default(0)
+  inputUnits   Int @default(0)
+  outputUnits  Int @default(0)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, feature, periodStart, periodEnd])
+  @@index([userId])
+  @@index([feature])
+}
