@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: ubiza_postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ubiza
+      POSTGRES_PASSWORD: ubiza123
+      POSTGRES_DB: ubiza_db
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - ubiza_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  ubiza_postgres_data:
