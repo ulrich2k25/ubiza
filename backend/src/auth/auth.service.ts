@@ -10,12 +10,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { BCRYPT_ROUNDS } from '../common/constants/auth.constants';
+import { TrustService } from '../trust/trust.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly trustService: TrustService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -110,6 +112,8 @@ export class AuthService {
         lastLoginAt: new Date(),
       },
     });
+
+    await this.trustService.recalculateUserTrust(user.id);
 
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,

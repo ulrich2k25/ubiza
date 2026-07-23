@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
   moduleFormat = "cjs"
 }
 
@@ -37,8 +37,6 @@ enum ListingStatus {
   DRAFT
   PUBLISHED
   PAUSED
-  SOLD
-  ARCHIVED
   REJECTED
   DELETED
 }
@@ -158,6 +156,26 @@ enum AIRequestStatus {
   FAILED
 }
 
+enum TrustLevel {
+  NEW
+  BASIC
+  TRUSTED
+  RESTRICTED
+}
+
+enum ContactAccessStatus {
+  GRANTED
+  DENIED
+  BLOCKED
+}
+
+enum ContactMethod {
+  PHONE
+  WHATSAPP
+  TELEGRAM
+  INSTAGRAM
+}
+
 // ======================================================
 // TABLES DE RÉFÉRENCE
 // ======================================================
@@ -184,7 +202,7 @@ model Currency {
   symbol   String
   isActive Boolean @default(true)
 
-  listings    Listing[]
+
   boosts      Boost[]
   commissions Commission[]
   payouts     Payout[]
@@ -220,9 +238,15 @@ model User {
   role         UserRole   @default(USER)
   status       UserStatus @default(PENDING_VERIFICATION)
 
-  emailVerifiedAt DateTime?
-  lastLoginAt     DateTime?
-  deletedAt       DateTime?
+  emailVerifiedAt      DateTime?
+  lastLoginAt          DateTime?
+  deletedAt            DateTime?
+  phoneVerifiedAt      DateTime?
+  acceptedRulesAt      DateTime?
+  contactAccessEnabled Boolean    @default(false)
+  trustScore           Int        @default(0)
+  trustLevel           TrustLevel @default(NEW)
+  trustUpdatedAt       DateTime?
 
   profile  Profile?
   settings UserSettings?
@@ -230,6 +254,7 @@ model User {
   verificationTokens VerificationToken[]
   listings           Listing[]
   favorites          Favorite[]
+  contactAccesses    ContactAccess[]
 
   reviewsWritten  Review[] @relation("ReviewsWritten")
   reviewsReceived Review[] @relation("ReviewsReceived")
@@ -256,6 +281,9 @@ model User {
   @@index([status])
   @@index([role])
   @@index([createdAt])
+  @@index([trustLevel])
+  @@index([trustScore])
+  @@index([contactAccessEnabled])
 }
 
 model Profile {
@@ -362,17 +390,15 @@ model Category {
 model Listing {
   id String @id @default(cuid())
 
-  userId     String
+  userId     String 
   categoryId String
   cityId     String
-  currencyId String
 
   title       String
   description String
-  price       Decimal @db.Decimal(12, 2)
 
   status       ListingStatus @default(DRAFT)
-  availableNow Boolean       @default(true)
+  availableNow Boolean       @default(false)
 
   allowPhone     Boolean @default(true)
   allowWhatsapp  Boolean @default(true)
@@ -384,36 +410,32 @@ model Listing {
   viewCount Int @default(0)
 
   publishedAt DateTime?
-  soldAt      DateTime?
-  archivedAt  DateTime?
+  pausedAt    DateTime?
   deletedAt   DateTime?
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id])
   city     City     @relation(fields: [cityId], references: [id])
-  currency Currency @relation(fields: [currencyId], references: [id])
 
-  images        ListingImage[]
-  favorites     Favorite[]
-  reviews       Review[]
-  reports       Report[]
-  conversations Conversation[]
-  contactClicks ContactClick[]
-  boosts        Boost[]
-  aiRequests    AIRequest[]
+  images          ListingImage[]
+  favorites       Favorite[]
+  reviews         Review[]
+  reports         Report[]
+  conversations   Conversation[]
+  contactClicks   ContactClick[]
+  boosts          Boost[]
+  aiRequests      AIRequest[]
+  contactAccesses ContactAccess[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
   @@index([categoryId])
   @@index([cityId])
-  @@index([currencyId])
   @@index([status])
   @@index([availableNow])
   @@index([publishedAt])
   @@index([createdAt])
-  @@index([price])
 }
 
 model ListingImage {
@@ -810,4 +832,26 @@ model AIUsage {
   @@unique([userId, feature, periodStart, periodEnd])
   @@index([userId])
   @@index([feature])
+}
+
+model ContactAccess {
+  id                 String              @id @default(cuid())
+  requesterId        String
+  listingId          String
+  method             ContactMethod
+  status             ContactAccessStatus @default(GRANTED)
+  trustScoreSnapshot Int
+  trustLevelSnapshot TrustLevel
+  denialReason       String?
+  grantedAt          DateTime?
+  deniedAt           DateTime?
+  createdAt          DateTime            @default(now())
+
+  requester User    @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([listingId])
+  @@index([status])
+  @@index([createdAt])
 }

@@ -7,10 +7,12 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from '../common/constants/auth.constants';
+import { TrustModule } from '../trust/trust.module';
 
 @Module({
   imports: [
     ConfigModule,
+    TrustModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
