@@ -11,3 +11,21 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.input-style {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1rem 1.25rem;
+  color: white;
+  outline: none;
+}
+
+.input-style::placeholder {
+  color: rgb(82 82 91);
+}
+
+.input-style:focus {
+  border-color: rgb(217 70 239);
+}

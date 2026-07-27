@@ -4,17 +4,19 @@ export async function api(endpoint: string, options: RequestInit = {}) {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
+  const headers = new Headers(options.headers);
+
+  if (!(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : {}),
-      ...options.headers,
-    },
+    headers,
   });
 
   const data = await response.json();

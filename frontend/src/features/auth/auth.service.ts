@@ -10,6 +10,7 @@ export interface RegisterData {
   password: string;
   firstName: string;
   lastName: string;
+  username: string;
   referralCode?: string;
 }
 
@@ -27,8 +28,8 @@ export const authService = {
       body: JSON.stringify(data),
     });
 
-    if (response.access_token) {
-      localStorage.setItem("token", response.access_token);
+    if (response.accessToken) {
+      localStorage.setItem("token", response.accessToken);
     }
 
     return response;
