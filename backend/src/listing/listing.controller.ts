@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Get,
 } from '@nestjs/common';
 
 import type { Request } from 'express';
@@ -26,6 +27,13 @@ type AuthenticatedUser = {
 @UseGuards(JwtAuthGuard)
 export class ListingController {
   constructor(private readonly listingService: ListingService) {}
+
+  @Get('mine')
+  findMine(@Req() request: Request) {
+    const user = request.user as AuthenticatedUser;
+
+    return this.listingService.findMine(user.id);
+  }
 
   @Post()
   create(@Req() request: Request, @Body() createListingDto: CreateListingDto) {

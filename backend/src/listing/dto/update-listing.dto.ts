@@ -1,8 +1,11 @@
 import {
   IsBoolean,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -18,6 +21,12 @@ export class UpdateListingDto {
   @MinLength(20)
   @MaxLength(3000)
   description?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(18)
+  @Max(99)
+  age?: number;
 
   @IsOptional()
   @IsString()

@@ -253,6 +253,7 @@ model User {
 
   verificationTokens VerificationToken[]
   listings           Listing[]
+  stories Story[]
   favorites          Favorite[]
   contactAccesses    ContactAccess[]
 
@@ -290,6 +291,7 @@ model Profile {
   id     String @id @default(cuid())
   userId String @unique
 
+  username String? @unique
   displayName String
   avatarUrl   String?
   description String?
@@ -396,6 +398,7 @@ model Listing {
 
   title       String
   description String
+  age          Int?
 
   status       ListingStatus @default(DRAFT)
   availableNow Boolean       @default(false)
@@ -460,6 +463,26 @@ model ListingImage {
   @@unique([listingId, position])
   @@index([listingId])
   @@index([listingId, isPrimary])
+}
+
+model Story {
+  id String @id @default(cuid())
+
+  userId String
+
+  imageUrl String
+  publicId String?
+
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
 }
 
 // ======================================================

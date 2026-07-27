@@ -12,6 +12,41 @@ import { UpdateListingDto } from './dto/update-listing.dto';
 export class ListingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findMine(userId: string) {
+    const listing = await this.prisma.listing.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        city: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        images: {
+          orderBy: {
+            position: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!listing) {
+      throw new NotFoundException('Vous ne possédez aucune annonce active.');
+    }
+
+    return listing;
+  }
+
   async create(userId: string, createListingDto: CreateListingDto) {
     const existingListing = await this.prisma.listing.findFirst({
       where: {
@@ -67,8 +102,10 @@ export class ListingService {
         userId,
         categoryId: createListingDto.categoryId,
         cityId: createListingDto.cityId,
+
         title: createListingDto.title.trim(),
         description: createListingDto.description.trim(),
+        age: createListingDto.age,
 
         availableNow: createListingDto.availableNow ?? false,
 
@@ -95,7 +132,11 @@ export class ListingService {
             name: true,
           },
         },
-        images: true,
+        images: {
+          orderBy: {
+            position: 'asc',
+          },
+        },
       },
     });
   }
@@ -105,12 +146,13 @@ export class ListingService {
       where: {
         id: listingId,
         userId,
+        deletedAt: null,
       },
     });
 
     if (!listing) {
       throw new NotFoundException(
-        'Annonce introuvable ou vous n êtes pas le propriétaire.',
+        'Annonce introuvable ou vous n’êtes pas le propriétaire.',
       );
     }
 
@@ -120,7 +162,8 @@ export class ListingService {
       },
       data: {
         status: 'PUBLISHED',
-        publishedAt: new Date(),
+        publishedAt: listing.publishedAt ?? new Date(),
+        pausedAt: null,
       },
     });
   }
@@ -242,6 +285,9 @@ export class ListingService {
           id: updateListingDto.categoryId,
           isActive: true,
         },
+        select: {
+          id: true,
+        },
       });
 
       if (!category) {
@@ -256,6 +302,9 @@ export class ListingService {
         where: {
           id: updateListingDto.cityId,
           isActive: true,
+        },
+        select: {
+          id: true,
         },
       });
 
@@ -272,8 +321,36 @@ export class ListingService {
       },
       data: {
         ...updateListingDto,
-        title: updateListingDto.title?.trim(),
-        description: updateListingDto.description?.trim(),
+
+        title:
+          updateListingDto.title !== undefined
+            ? updateListingDto.title.trim()
+            : undefined,
+
+        description:
+          updateListingDto.description !== undefined
+            ? updateListingDto.description.trim()
+            : undefined,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+        city: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        images: {
+          orderBy: {
+            position: 'asc',
+          },
+        },
       },
     });
   }
