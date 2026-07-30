@@ -21,4 +21,3 @@ export const boostService = {
     return api("/boosts/status");
   },
 };
-

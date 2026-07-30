@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 
@@ -95,7 +95,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
 
       onUpdated(status);
     } catch (error) {
-      console.error("Erreur lors de lâ€™activation du Boost :", error);
+      console.error("Erreur lors de l’activation du Boost :", error);
     } finally {
       setLoading(false);
     }
@@ -106,15 +106,15 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
 
   return (
     <article className="rounded-3xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/5 p-6">
-      <p className="text-sm font-medium text-fuchsia-400">ðŸš€ Boost</p>
+      <p className="text-sm font-medium text-fuchsia-400">🚀 Boost</p>
 
       <h2 className="mt-2 text-3xl font-bold">{boost.boostCredits}</h2>
 
-      <p className="mt-2 text-sm text-zinc-400">CrÃ©dit(s) disponible(s)</p>
+      <p className="mt-2 text-sm text-zinc-400">Crédit(s) disponible(s)</p>
 
       {boost.isBoostActive ? (
         <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-          <p className="font-semibold text-emerald-300">ðŸš€ Boost actif</p>
+          <p className="font-semibold text-emerald-300">🚀 Boost actif</p>
 
           <p className="mt-2 text-sm text-zinc-400">Temps restant</p>
 
@@ -125,7 +125,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
       ) : (
         <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <p className="text-sm text-zinc-400">
-            Votre annonce n&apos;est pas boostÃ©e actuellement.
+            Votre annonce n&apos;est pas boostée actuellement.
           </p>
         </div>
       )}
@@ -141,7 +141,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
           : boost.isBoostActive
             ? "Boost actif"
             : boost.boostCredits === 0
-              ? "Aucun crÃ©dit disponible"
+              ? "Aucun crédit disponible"
               : "Activer un Boost (1 heure)"}
       </button>
     </article>

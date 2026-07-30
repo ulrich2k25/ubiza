@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+﻿import { api } from "@/services/api";
 
 export interface DashboardData {
   user: {
@@ -12,6 +12,7 @@ export interface DashboardData {
   };
 
   profile: {
+    username: string;
     displayName: string;
     avatarUrl: string | null;
     description: string | null;

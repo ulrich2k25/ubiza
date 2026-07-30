@@ -70,7 +70,7 @@ export default function HomeHero() {
           text-fuchsia-300
           "
         >
-          ✨ Découvrez des créatrices vérifiées près de vous
+          ✨ Découvrez des profils vérifiées près de vous
         </div>
 
         <h1
@@ -82,7 +82,7 @@ export default function HomeHero() {
           sm:text-6xl
           "
         >
-          Trouvez une créatrice
+          Trouvez un profil
           <br />
           <span className="text-fuchsia-500">qui vous correspond</span>
         </h1>
@@ -182,3 +182,4 @@ export default function HomeHero() {
     </section>
   );
 }
+

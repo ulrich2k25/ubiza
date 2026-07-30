@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { authService } from "@/features/auth/auth.service";
@@ -16,9 +16,19 @@ export default function RegisterPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const referralCodeFromUrl = params.get("ref");
+
+    if (referralCodeFromUrl) {
+      setReferralCode(referralCodeFromUrl.trim().toUpperCase());
+    }
+  }, []);
 
   function getSafeNextPath() {
     const params = new URLSearchParams(window.location.search);
@@ -38,27 +48,24 @@ export default function RegisterPage() {
       setError("");
       setLoading(true);
 
+      const normalizedReferralCode = referralCode.trim().toUpperCase();
+
       await authService.register({
         username: username.trim(),
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email: email.trim(),
         password,
+        ...(normalizedReferralCode
+          ? { referralCode: normalizedReferralCode }
+          : {}),
       });
 
-      /*
-       * Connexion automatique après l’inscription.
-       * Le token est enregistré par authService.login().
-       */
       await authService.login({
         email: email.trim(),
         password,
       });
 
-      /*
-       * Actualise immédiatement l’état global :
-       * isAuthenticated, user et hasListing.
-       */
       await refreshAuth();
 
       router.replace(getSafeNextPath());
@@ -200,6 +207,25 @@ export default function RegisterPage() {
           required
         />
 
+        <div>
+          <input
+            type="text"
+            placeholder="Code de parrainage (facultatif)"
+            value={referralCode}
+            onChange={(event) =>
+              setReferralCode(event.target.value.toUpperCase())
+            }
+            className="input-style"
+            autoComplete="off"
+          />
+
+          {referralCode ? (
+            <p className="mt-2 text-xs text-fuchsia-300">
+              Code de parrainage détecté : {referralCode}
+            </p>
+          ) : null}
+        </div>
+
         <button
           type="submit"
           disabled={loading}
@@ -241,3 +267,4 @@ export default function RegisterPage() {
     </main>
   );
 }
+

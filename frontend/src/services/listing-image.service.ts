@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+﻿import { api } from "@/services/api";
 
 export interface FaceBoxPayload {
   x: number;
@@ -78,3 +78,4 @@ export const listingImageService = {
     });
   },
 };
+

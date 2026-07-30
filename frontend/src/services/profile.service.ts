@@ -10,6 +10,18 @@ export interface PublicProfile {
 
   description: string | null;
 
+  isVerified: boolean;
+
+  isPremium: boolean;
+
+  isBoosted: boolean;
+
+  visibilityPriority: number;
+
+  premiumActiveUntil: string | null;
+
+  createdAt: string;
+
   city: {
     id: string;
     name: string;
@@ -24,7 +36,21 @@ export interface PublicProfile {
 
     age: number;
 
+    boostActiveUntil: string | null;
+
+    isBoosted: boolean;
+
+    isPremium: boolean;
+
+    visibilityPriority: number;
+
     availableNow: boolean;
+
+    viewCount: number;
+
+    favoriteCount: number;
+
+    publishedAt: string | null;
 
     images: {
       id: string;

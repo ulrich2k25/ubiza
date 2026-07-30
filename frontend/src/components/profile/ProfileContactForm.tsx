@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import {
   type ProfileContact,
@@ -26,6 +26,16 @@ export default function ProfileContactForm({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -42,6 +52,10 @@ export default function ProfileContactForm({
 
       onSaved(updatedContact);
       setSuccess("Coordonnées enregistrées avec succès.");
+
+      closeTimeoutRef.current = setTimeout(() => {
+        onCancel();
+      }, 2000);
     } catch (err) {
       setError(
         err instanceof Error
@@ -52,6 +66,8 @@ export default function ProfileContactForm({
       setLoading(false);
     }
   }
+
+  const isDisabled = loading || Boolean(success);
 
   return (
     <form
@@ -73,6 +89,7 @@ export default function ProfileContactForm({
         placeholder="+237 6 00 00 00 00"
         value={phone}
         onChange={setPhone}
+        disabled={isDisabled}
       />
 
       <ContactInput
@@ -82,6 +99,7 @@ export default function ProfileContactForm({
         placeholder="+237 6 00 00 00 00"
         value={whatsapp}
         onChange={setWhatsapp}
+        disabled={isDisabled}
       />
 
       <ContactInput
@@ -91,6 +109,7 @@ export default function ProfileContactForm({
         placeholder="@votre_pseudo"
         value={telegram}
         onChange={setTelegram}
+        disabled={isDisabled}
       />
 
       {error && (
@@ -108,10 +127,14 @@ export default function ProfileContactForm({
       <div className="flex flex-col gap-3 sm:flex-row">
         <button
           type="submit"
-          disabled={loading}
+          disabled={isDisabled}
           className="flex-1 rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Enregistrement..." : "Enregistrer"}
+          {loading
+            ? "Enregistrement..."
+            : success
+              ? "Enregistré"
+              : "Enregistrer"}
         </button>
 
         <button
@@ -134,6 +157,7 @@ interface ContactInputProps {
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }
 
 function ContactInput({
@@ -143,6 +167,7 @@ function ContactInput({
   placeholder,
   value,
   onChange,
+  disabled = false,
 }: ContactInputProps) {
   return (
     <div>
@@ -155,8 +180,9 @@ function ContactInput({
         type={type}
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-500/60 focus:ring-2 focus:ring-fuchsia-500/10"
+        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-500/60 focus:ring-2 focus:ring-fuchsia-500/10 disabled:cursor-not-allowed disabled:opacity-60"
       />
     </div>
   );

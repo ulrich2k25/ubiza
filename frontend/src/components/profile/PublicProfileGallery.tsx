@@ -51,7 +51,7 @@ export default function PublicProfileGallery({
           >
             <img
               src={getImageUrl(image.url)}
-              alt="Photo créatrice"
+              alt="Photo profil"
               className="
                 h-full
                 min-h-[220px]
@@ -112,3 +112,4 @@ export default function PublicProfileGallery({
     </section>
   );
 }
+

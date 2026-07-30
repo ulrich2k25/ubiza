@@ -1,4 +1,4 @@
-import CreatorCard from "@/components/creators/CreatorCard";
+﻿import CreatorCard from "@/components/creators/CreatorCard";
 import type { PublicCreator } from "@/services/public-profile.service";
 
 interface CreatorGridProps {
@@ -27,3 +27,4 @@ export default function CreatorGrid({
     </div>
   );
 }
+

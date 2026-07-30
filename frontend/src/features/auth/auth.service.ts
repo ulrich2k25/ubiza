@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+﻿import { api } from "@/services/api";
 
 export interface LoginData {
   email: string;
@@ -43,3 +43,4 @@ export const authService = {
     localStorage.removeItem("token");
   },
 };
+

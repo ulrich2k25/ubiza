@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 
 const footerLinkClass =
   "text-sm text-zinc-400 transition hover:text-fuchsia-400";
@@ -17,7 +17,7 @@ export default function SiteFooter() {
           </Link>
 
           <p className="mt-4 max-w-sm text-sm leading-6 text-zinc-400">
-            La plateforme de rÃ©fÃ©rence pour dÃ©couvrir des profils partout au
+            La plateforme de référence pour découvrir des profils partout au
             Cameroun.
           </p>
         </div>
@@ -34,7 +34,7 @@ export default function SiteFooter() {
 
             <li>
               <Link href="/search" className={footerLinkClass}>
-                DÃ©couvrir
+                Découvrir
               </Link>
             </li>
 
@@ -58,7 +58,7 @@ export default function SiteFooter() {
           <ul className="space-y-3">
             <li>
               <Link href="/about" className={footerLinkClass}>
-                Ã€ propos
+                À propos
               </Link>
             </li>
 
@@ -77,7 +77,7 @@ export default function SiteFooter() {
         </div>
 
         <div>
-          <h3 className="mb-5 text-base font-bold text-white">LÃ©gal</h3>
+          <h3 className="mb-5 text-base font-bold text-white">Légal</h3>
 
           <ul className="space-y-3">
             <li>
@@ -88,13 +88,13 @@ export default function SiteFooter() {
 
             <li>
               <Link href="/privacy" className={footerLinkClass}>
-                Politique de confidentialitÃ©
+                Politique de confidentialité
               </Link>
             </li>
 
             <li>
               <Link href="/legal" className={footerLinkClass}>
-                Mentions lÃ©gales
+                Mentions légales
               </Link>
             </li>
           </ul>
@@ -103,7 +103,7 @@ export default function SiteFooter() {
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-5 py-6 text-center text-sm text-zinc-500 sm:flex-row sm:text-left">
-          <p>Â© 2026 Ubiza. Tous droits rÃ©servÃ©s.</p>
+          <p>© 2026 Ubiza. Tous droits réservés.</p>
         </div>
       </div>
     </footer>

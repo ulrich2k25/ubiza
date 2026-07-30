@@ -725,3 +725,4 @@ function formatFileSize(size: number): string {
 
   return `${sizeInMegabytes.toFixed(1)} Mo`;
 }
+

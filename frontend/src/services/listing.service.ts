@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+﻿import { api } from "@/services/api";
 import type { ListingImage } from "@/services/listing-image.service";
 
 export interface CreateListingData {
@@ -63,3 +63,4 @@ export const listingService = {
     });
   },
 };
+

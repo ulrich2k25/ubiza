@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -71,7 +71,7 @@ export default function ReferralsPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-              Invitez d&apos;autres crÃ©atrices sur Ubiza et gagnez des crÃ©dits
+              Invitez d&apos;autres profils sur Ubiza et gagnez des crédits
               Boost.
             </p>
           </div>
@@ -85,10 +85,10 @@ export default function ReferralsPage() {
         </div>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <StatCard label="CrÃ©dits Boost" value={data.boostCredits} />
-          <StatCard label="CrÃ©atrices parrainÃ©es" value={data.totalReferrals} />
+          <StatCard label="Crédits Boost" value={data.boostCredits} />
+          <StatCard label="Profils parrainées" value={data.totalReferrals} />
           <StatCard
-            label="RÃ©compense"
+            label="Récompense"
             value="Boost"
             description="Activation manuelle"
           />
@@ -108,7 +108,7 @@ export default function ReferralsPage() {
                 onClick={() => copyValue(data.referralCode, "code")}
                 className="rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-zinc-200"
               >
-                {copiedValue === "code" ? "CopiÃ©" : "Copier"}
+                {copiedValue === "code" ? "Copié" : "Copier"}
               </button>
             </div>
           </article>
@@ -126,7 +126,7 @@ export default function ReferralsPage() {
                 onClick={() => copyValue(referralLink, "link")}
                 className="rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold transition hover:opacity-90"
               >
-                {copiedValue === "link" ? "CopiÃ©" : "Copier"}
+                {copiedValue === "link" ? "Copié" : "Copier"}
               </button>
             </div>
           </article>
@@ -134,10 +134,10 @@ export default function ReferralsPage() {
 
         <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-6">
           <div className="mb-6">
-            <p className="text-sm text-zinc-400">Votre rÃ©seau</p>
+            <p className="text-sm text-zinc-400">Votre réseau</p>
 
             <h2 className="mt-1 text-xl font-semibold">
-              CrÃ©atrices parrainÃ©es
+              Profils parrainées
             </h2>
           </div>
 
@@ -152,7 +152,7 @@ export default function ReferralsPage() {
                     <p className="font-semibold">
                       {referral.displayName ||
                         referral.username ||
-                        "CrÃ©atrice Ubiza"}
+                        "Profil Ubiza"}
                     </p>
 
                     {referral.username && (
@@ -172,11 +172,11 @@ export default function ReferralsPage() {
           ) : (
             <div className="rounded-2xl border border-dashed border-white/15 bg-black/20 px-6 py-10 text-center">
               <p className="font-semibold">
-                Vous n&apos;avez encore parrainÃ© personne.
+                Vous n&apos;avez encore parrainé personne.
               </p>
 
               <p className="mt-2 text-sm text-zinc-400">
-                Copiez votre lien et partagez-le avec une crÃ©atrice intÃ©ressÃ©e
+                Copiez votre lien et partagez-le avec un profil intéressée
                 par Ubiza.
               </p>
             </div>

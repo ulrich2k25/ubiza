@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Ubiza",
-  description: "Découvrez des créatrices près de vous",
+  description: "Découvrez des profils près de vous",
 };
 
 export default function RootLayout({
@@ -36,3 +36,4 @@ export default function RootLayout({
     </html>
   );
 }
+

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { api } from "@/services/api";
+import SiteFooter from "@/components/layout/SiteFooter";
 
 interface SearchPageProps {
   searchParams: Promise<{
@@ -107,6 +108,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         )}
       </div>
+
+      <SiteFooter />
     </main>
   );
 }
+

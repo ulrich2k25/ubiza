@@ -16,7 +16,7 @@ export default function FeaturedCreators({ creators }: FeaturedCreatorsProps) {
     <section id="creators" className="mx-auto max-w-7xl px-5 py-16">
       <div className="mb-8">
         <p className="text-sm font-medium text-fuchsia-400">
-          Créatrices populaires
+          Profils populaires
         </p>
 
         <h2 className="mt-2 text-3xl font-black text-white">
@@ -28,3 +28,4 @@ export default function FeaturedCreators({ creators }: FeaturedCreatorsProps) {
     </section>
   );
 }
+

@@ -86,3 +86,4 @@ export async function detectFace(
 export const faceDetectionService = {
   detectFace,
 };
+

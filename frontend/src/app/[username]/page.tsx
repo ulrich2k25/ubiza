@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import CreatorGrid from "@/components/creators/CreatorGrid";
 
+import CreatorGrid from "@/components/creators/CreatorGrid";
+import FavoriteButton from "@/components/favorites/FavoriteButton";
+import SiteFooter from "@/components/layout/SiteFooter";
 import PublicProfileContact from "@/components/profile/PublicProfileContact";
 import PublicProfileGallery from "@/components/profile/PublicProfileGallery";
 import PublicProfileHero from "@/components/profile/PublicProfileHero";
-import PublicProfileTrust from "@/components/profile/PublicProfileTrust";
+import PublicStories from "@/components/stories/PublicStories";
 
 import type { PublicCreator } from "@/services/public-profile.service";
 import {
@@ -13,7 +15,6 @@ import {
   getSuggestions,
   type PublicProfile,
 } from "@/services/profile.service";
-import PublicStories from "@/components/stories/PublicStories";
 
 interface PageProps {
   params: Promise<{
@@ -33,6 +34,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
   }
 
   const listing = profile.listings?.[0];
+
+  const isBoosted = profile.isBoosted || listing?.isBoosted || false;
 
   let suggestions: PublicCreator[] = [];
 
@@ -69,7 +72,34 @@ export default async function PublicProfilePage({ params }: PageProps) {
           username={profile.username}
           avatarUrl={profile.avatarUrl}
           city={profile.city?.name}
+          isVerified={profile.isVerified}
+          viewCount={listing?.viewCount ?? 0}
+          favoriteCount={listing?.favoriteCount ?? 0}
+          createdAt={profile.createdAt}
         />
+
+        {/* STATUTS DU PROFIL */}
+        {(isBoosted || profile.isPremium || profile.isVerified) && (
+          <div className="flex flex-wrap items-center gap-3">
+            {isBoosted ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/20 px-4 py-2 text-sm font-bold text-fuchsia-200 backdrop-blur">
+                🚀 Boost
+              </span>
+            ) : null}
+
+            {profile.isPremium ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-400/20 px-4 py-2 text-sm font-bold text-amber-200 backdrop-blur">
+                ⭐ Premium
+              </span>
+            ) : null}
+
+            {profile.isVerified ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/20 bg-blue-500/20 px-4 py-2 text-sm font-semibold text-blue-300 backdrop-blur">
+                ✓ Vérifiée
+              </span>
+            ) : null}
+          </div>
+        )}
 
         <PublicStories username={profile.username} />
 
@@ -82,8 +112,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
                   <h1 className="text-3xl font-bold">{listing.title}</h1>
 
                   {listing.availableNow ? (
-                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm text-emerald-300">
-                      Disponible maintenant
+                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-300">
+                      🟢 Disponible maintenant
                     </span>
                   ) : null}
                 </div>
@@ -106,6 +136,14 @@ export default async function PublicProfilePage({ params }: PageProps) {
               ) : null}
             </section>
 
+            {/* FAVORI */}
+            <div className="flex justify-end">
+              <FavoriteButton
+                listingId={listing.id}
+                username={profile.username}
+              />
+            </div>
+
             {/* CONTACT */}
             <PublicProfileContact
               username={profile.username}
@@ -114,12 +152,9 @@ export default async function PublicProfilePage({ params }: PageProps) {
           </>
         ) : (
           <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-center text-zinc-400">
-            Cette créatrice n&apos;a pas encore publié d&apos;annonce.
+            Ce profil n&apos;a pas encore publié d&apos;annonce.
           </section>
         )}
-
-        {/* CONFIANCE */}
-        <PublicProfileTrust />
 
         {/* SUGGESTIONS */}
         {suggestions.length > 0 ? (
@@ -147,6 +182,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
           </section>
         ) : null}
       </div>
+
+      <SiteFooter />
     </main>
   );
 }

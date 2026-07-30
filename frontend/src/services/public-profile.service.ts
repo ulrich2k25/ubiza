@@ -1,4 +1,4 @@
-import { api } from "@/services/api";
+﻿import { api } from "@/services/api";
 
 export interface PublicCreator {
   username: string;
@@ -8,6 +8,16 @@ export interface PublicCreator {
   avatarUrl: string | null;
 
   description: string | null;
+
+  isVerified: boolean;
+
+  isPremium: boolean;
+
+  isBoosted: boolean;
+
+  visibilityPriority: number;
+
+  createdAt: string;
 
   city: {
     id: string;
@@ -24,6 +34,14 @@ export interface PublicCreator {
     availableNow: boolean;
 
     viewCount: number;
+
+    favoriteCount?: number;
+
+    publishedAt: string | null;
+
+    boostActiveUntil: string | null;
+
+    isBoosted: boolean;
 
     primaryImage: string | null;
   } | null;

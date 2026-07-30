@@ -141,7 +141,7 @@ export default function PublicStories({ username }: PublicStoriesProps) {
             </p>
 
             <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-400">
-              Cette créatrice n’a actuellement aucune story active.
+              Ce profil n’a actuellement aucune story active.
             </p>
           </div>
         ) : (
@@ -267,3 +267,4 @@ function StoryIcon() {
     </svg>
   );
 }
+

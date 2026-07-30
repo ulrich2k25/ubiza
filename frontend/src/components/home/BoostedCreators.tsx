@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 
@@ -29,16 +29,16 @@ export default function BoostedCreators({ creators }: BoostedCreatorsProps) {
         <div className="relative mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-300">
-              <span>ðŸš€</span>
+              <span>🚀</span>
               Profils mis en avant
             </div>
 
             <h2 className="mt-4 text-3xl font-black text-white sm:text-4xl">
-              Les profils Ã  la une
+              Les profils à la une
             </h2>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400 sm:text-base">
-              DÃ©couvre les crÃ©atrices actuellement mises en avant sur Ubiza.
+              Découvre les profils actuellement mises en avant sur Ubiza.
             </p>
           </div>
 
@@ -46,7 +46,7 @@ export default function BoostedCreators({ creators }: BoostedCreatorsProps) {
             href="/#creators"
             className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-fuchsia-400/30 hover:bg-fuchsia-500/10 hover:text-white"
           >
-            Voir tous les profils â†’
+            Voir tous les profils →
           </Link>
         </div>
 
@@ -83,12 +83,12 @@ export default function BoostedCreators({ creators }: BoostedCreatorsProps) {
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
 
                     <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-500/20 px-3 py-1.5 text-xs font-bold text-fuchsia-100 backdrop-blur-xl">
-                      ðŸš€ Boost
+                      🚀 Boost
                     </div>
 
                     {creator.listing?.availableNow ? (
                       <div className="absolute right-4 top-4 rounded-full border border-emerald-300/20 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 backdrop-blur-xl">
-                        ðŸŸ¢ Disponible
+                        🟢 Disponible
                       </div>
                     ) : null}
 
@@ -103,7 +103,7 @@ export default function BoostedCreators({ creators }: BoostedCreatorsProps) {
 
                       <div className="mt-3 flex items-center justify-between gap-3 text-sm text-zinc-300">
                         <span className="truncate">
-                          ðŸ“ {creator.city?.name ?? "Cameroun"}
+                          📍 {creator.city?.name ?? "Cameroun"}
                         </span>
 
                         {creator.listing?.age ? (
@@ -117,11 +117,11 @@ export default function BoostedCreators({ creators }: BoostedCreatorsProps) {
 
                   <div className="flex items-center justify-between border-t border-white/10 px-5 py-4">
                     <span className="text-sm text-zinc-400">
-                      ðŸ‘ {creator.listing?.viewCount ?? 0} vues
+                      👁 {creator.listing?.viewCount ?? 0} vues
                     </span>
 
                     <span className="text-sm font-bold text-fuchsia-300 transition group-hover:text-fuchsia-200">
-                      Voir le profil â†’
+                      Voir le profil →
                     </span>
                   </div>
                 </article>

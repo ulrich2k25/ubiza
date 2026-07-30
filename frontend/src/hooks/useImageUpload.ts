@@ -153,3 +153,4 @@ export function useImageUpload({ maxImages = 10 }: UseImageUploadOptions = {}) {
     setFaceBox,
   };
 }
+
