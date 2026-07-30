@@ -110,6 +110,52 @@ enum BoostStatus {
   CANCELLED
 }
 
+enum BoostSource {
+  REFERRAL_CREDIT
+  PURCHASE
+  ADMIN
+}
+
+enum PremiumPlan {
+  TRIAL_7_DAYS
+  DAY_1
+  DAYS_7
+  DAYS_30
+}
+
+enum PremiumSource {
+  TRIAL
+  PURCHASE
+  ADMIN
+}
+
+enum PremiumSubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  KPAY
+  CINETPAY
+  MANUAL
+}
+
+enum PaymentPurpose {
+  PREMIUM
+  BOOST
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
 enum AmbassadorStatus {
   PENDING
   ACTIVE
@@ -202,10 +248,11 @@ model Currency {
   symbol   String
   isActive Boolean @default(true)
 
-
-  boosts      Boost[]
-  commissions Commission[]
-  payouts     Payout[]
+  boosts               Boost[]
+  premiumSubscriptions PremiumSubscription[]
+  payments             Payment[]
+  commissions          Commission[]
+  payouts              Payout[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -247,15 +294,36 @@ model User {
   trustScore           Int        @default(0)
   trustLevel           TrustLevel @default(NEW)
   trustUpdatedAt       DateTime?
+  // ===========================
+  // Referral (MVP)
+  // ===========================
+
+  referralCode            String?   @unique
+  referredById            String?
+  boostCredits            Int       @default(0)
+  referralRewardGrantedAt DateTime?
+
+  // ===========================
+  // Premium
+  // ===========================
+
+  premiumActiveUntil    DateTime?
+  premiumTrialStartedAt DateTime?
+  premiumTrialUsed      Boolean   @default(false)
+
+  referredBy    User?  @relation("UserReferralNetwork", fields: [referredById], references: [id], onDelete: SetNull)
+  referredUsers User[] @relation("UserReferralNetwork")
 
   profile  Profile?
   settings UserSettings?
 
-  verificationTokens VerificationToken[]
-  listings           Listing[]
-  stories Story[]
-  favorites          Favorite[]
-  contactAccesses    ContactAccess[]
+  verificationTokens   VerificationToken[]
+  listings             Listing[]
+  stories              Story[]
+  favorites            Favorite[]
+  contactAccesses      ContactAccess[]
+  premiumSubscriptions PremiumSubscription[]
+  payments             Payment[]
 
   reviewsWritten  Review[] @relation("ReviewsWritten")
   reviewsReceived Review[] @relation("ReviewsReceived")
@@ -285,13 +353,17 @@ model User {
   @@index([trustLevel])
   @@index([trustScore])
   @@index([contactAccessEnabled])
+  @@index([referralCode])
+  @@index([referredById])
+  @@index([premiumActiveUntil])
+  @@index([premiumTrialUsed])
 }
 
 model Profile {
   id     String @id @default(cuid())
   userId String @unique
 
-  username String? @unique
+  username    String? @unique
   displayName String
   avatarUrl   String?
   description String?
@@ -305,6 +377,9 @@ model Profile {
   languageId String?
 
   profileQualityScore Int?
+
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   city     City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
@@ -392,13 +467,14 @@ model Category {
 model Listing {
   id String @id @default(cuid())
 
-  userId     String 
-  categoryId String
-  cityId     String
+  userId           String
+  categoryId       String
+  cityId           String
+  boostActiveUntil DateTime?
 
   title       String
   description String
-  age          Int?
+  age         Int?
 
   status       ListingStatus @default(DRAFT)
   availableNow Boolean       @default(false)
@@ -429,6 +505,7 @@ model Listing {
   boosts          Boost[]
   aiRequests      AIRequest[]
   contactAccesses ContactAccess[]
+  views           ListingView[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -439,6 +516,21 @@ model Listing {
   @@index([availableNow])
   @@index([publishedAt])
   @@index([createdAt])
+}
+
+model ListingView {
+  id String @id @default(cuid())
+
+  listingId  String
+  visitorKey String
+
+  viewedAt DateTime @default(now())
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([visitorKey])
+  @@index([listingId, visitorKey, viewedAt])
 }
 
 model ListingImage {
@@ -659,24 +751,124 @@ model Notification {
 model Boost {
   id String @id @default(cuid())
 
-  listingId  String
-  currencyId String
+  listingId String
 
-  amount Decimal     @db.Decimal(12, 2)
+  source BoostSource
   status BoostStatus @default(PENDING)
+
+  durationMinutes Int
+
+  // Utilisé uniquement pour les boosts obtenus avec des crédits
+  creditCost Int @default(0)
+
+  // Facultatifs, car un boost de parrainage est gratuit
+  amount     Decimal? @db.Decimal(12, 2)
+  currencyId String?
+
+  // Facultatif : aucun paiement pour un boost par crédit
+  paymentId String? @unique
 
   startsAt DateTime?
   endsAt   DateTime?
 
-  listing  Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  currency Currency @relation(fields: [currencyId], references: [id])
+  listing  Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  currency Currency? @relation(fields: [currencyId], references: [id], onDelete: SetNull)
+  payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([listingId])
+  @@index([source])
   @@index([status])
+  @@index([startsAt])
+  @@index([endsAt])
   @@index([startsAt, endsAt])
+  @@index([currencyId])
+}
+
+model PremiumSubscription {
+  id String @id @default(cuid())
+
+  userId String
+
+  plan   PremiumPlan
+  source PremiumSource
+  status PremiumSubscriptionStatus @default(PENDING)
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  // Null pour l’essai gratuit ou une activation administrateur
+  amount     Decimal? @db.Decimal(12, 2)
+  currencyId String?
+
+  // Null pour l’essai gratuit ou une activation administrateur
+  paymentId String? @unique
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency Currency? @relation(fields: [currencyId], references: [id], onDelete: SetNull)
+  payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([plan])
+  @@index([source])
+  @@index([status])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([userId, status])
+  @@index([currencyId])
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  userId     String
+  currencyId String
+
+  provider PaymentProvider
+  purpose  PaymentPurpose
+  status   PaymentStatus   @default(PENDING)
+
+  amount Decimal @db.Decimal(12, 2)
+
+  // Identifiants reçus de KPay, CinetPay ou d’un autre fournisseur
+  externalReference     String? @unique
+  providerTransactionId String? @unique
+
+  // Numéro Mobile Money utilisé, si le fournisseur le retourne
+  customerPhone String?
+
+  // Données techniques du fournisseur de paiement
+  providerData Json?
+
+  failureReason String?
+
+  initiatedAt DateTime  @default(now())
+  paidAt      DateTime?
+  failedAt    DateTime?
+  cancelledAt DateTime?
+  expiresAt   DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  premiumSubscription PremiumSubscription?
+  boost               Boost?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([provider])
+  @@index([purpose])
+  @@index([status])
+  @@index([currencyId])
+  @@index([createdAt])
+  @@index([userId, status])
 }
 
 // ======================================================

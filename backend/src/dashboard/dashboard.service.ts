@@ -23,6 +23,7 @@ export class DashboardService {
 
         profile: {
           select: {
+            username: true,
             displayName: true,
             avatarUrl: true,
             description: true,

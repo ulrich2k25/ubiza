@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 
 import type { Request } from 'express';
+import { createHash } from 'crypto';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateProfileContactDto } from './dto/update-profile-contact.dto';
@@ -100,7 +101,23 @@ export class ProfileController {
    * GET /profiles/bella237
    */
   @Get(':username')
-  findPublicProfile(@Param('username') username: string) {
-    return this.profileService.findPublicProfile(username);
+  findPublicProfile(
+    @Param('username') username: string,
+    @Req() request: Request,
+  ) {
+    const forwardedFor = request.headers['x-forwarded-for'];
+
+    const ipAddress =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : request.ip || request.socket.remoteAddress || 'unknown-ip';
+
+    const userAgent = request.headers['user-agent'] || 'unknown-user-agent';
+
+    const visitorKey = createHash('sha256')
+      .update(`${ipAddress}:${userAgent}`)
+      .digest('hex');
+
+    return this.profileService.findPublicProfile(username, visitorKey);
   }
 }

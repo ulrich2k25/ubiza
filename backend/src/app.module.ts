@@ -16,6 +16,11 @@ import { CategoriesModule } from './categories/categories.module';
 import { ProfileModule } from './profile/profile.module';
 import { StorageModule } from './storage/storage.module';
 import { StoriesModule } from './stories/stories.module';
+import { ReferralsModule } from './referrals/referrals.module';
+import { BoostsModule } from './boosts/boosts.module';
+import { MailModule } from './mail/mail.module';
+import { FavoritesModule } from './favorites/favorites.module';
+import { PremiumModule } from './premium/premium.module';
 
 @Module({
   imports: [
@@ -34,6 +39,11 @@ import { StoriesModule } from './stories/stories.module';
     ProfileModule,
     StorageModule,
     StoriesModule,
+    ReferralsModule,
+    BoostsModule,
+    MailModule,
+    FavoritesModule,
+    PremiumModule,
   ],
   controllers: [AppController],
   providers: [AppService],

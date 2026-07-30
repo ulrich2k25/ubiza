@@ -8,11 +8,15 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from '../common/constants/auth.constants';
 import { TrustModule } from '../trust/trust.module';
+import { ProfileModule } from '../profile/profile.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     ConfigModule,
     TrustModule,
+    ProfileModule,
+    MailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

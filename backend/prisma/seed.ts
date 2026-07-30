@@ -25,9 +25,9 @@ async function main() {
       displayOrder: 2,
     },
     {
-      name: 'Compagnie',
-      slug: 'compagnie',
-      description: 'Annonces de compagnie et rencontres privées.',
+      name: 'Sexcam',
+      slug: 'sexcam',
+      description: 'Prestations en webcam et contenus privés.',
       displayOrder: 3,
     },
   ];
@@ -36,11 +36,17 @@ async function main() {
     'Douala',
     'Yaoundé',
     'Bafoussam',
-    'Buea',
     'Kribi',
+    'Buea',
+    'Bertoua',
     'Limbe',
-    'Garoua',
+    'Dschang',
     'Bamenda',
+    'Garoua',
+    'Ngaoundéré',
+    'Maroua',
+    'Kumba',
+    'Bafia',
   ];
 
   for (const category of categories) {
@@ -57,6 +63,35 @@ async function main() {
       create: {
         ...category,
         isActive: true,
+      },
+    });
+  }
+
+  const compagnieCategory = await prisma.category.findUnique({
+    where: {
+      slug: 'compagnie',
+    },
+  });
+
+  const escortesCategory = await prisma.category.findUnique({
+    where: {
+      slug: 'escortes',
+    },
+  });
+
+  if (compagnieCategory && escortesCategory) {
+    await prisma.listing.updateMany({
+      where: {
+        categoryId: compagnieCategory.id,
+      },
+      data: {
+        categoryId: escortesCategory.id,
+      },
+    });
+
+    await prisma.category.delete({
+      where: {
+        id: compagnieCategory.id,
       },
     });
   }
@@ -81,7 +116,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error);
+    console.error('Erreur pendant le seed :', error);
     process.exit(1);
   })
   .finally(async () => {

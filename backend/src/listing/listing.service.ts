@@ -7,10 +7,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { UpdateListingDto } from './dto/update-listing.dto';
+import { ProfileService } from '../profile/profile.service';
 
 @Injectable()
 export class ListingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly profileService: ProfileService,
+  ) {}
 
   async findMine(userId: string) {
     const listing = await this.prisma.listing.findFirst({
@@ -156,16 +160,72 @@ export class ListingService {
       );
     }
 
-    return this.prisma.listing.update({
+    const user = await this.prisma.user.findUnique({
       where: {
-        id: listingId,
+        id: userId,
       },
-      data: {
-        status: 'PUBLISHED',
-        publishedAt: listing.publishedAt ?? new Date(),
-        pausedAt: null,
+      select: {
+        referredById: true,
+        referralRewardGrantedAt: true,
       },
     });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+
+    const isFirstPublication = listing.publishedAt === null;
+
+    const shouldRewardReferrer =
+      isFirstPublication &&
+      user.referredById !== null &&
+      user.referralRewardGrantedAt === null;
+
+    const publishedAt = listing.publishedAt ?? new Date();
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const publishedListing = await transaction.listing.update({
+        where: {
+          id: listingId,
+        },
+        data: {
+          status: 'PUBLISHED',
+          publishedAt,
+          pausedAt: null,
+        },
+      });
+
+      if (shouldRewardReferrer && user.referredById) {
+        await transaction.user.update({
+          where: {
+            id: user.referredById,
+          },
+          data: {
+            boostCredits: {
+              increment: 1,
+            },
+          },
+        });
+
+        await transaction.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            referralRewardGrantedAt: new Date(),
+          },
+        });
+      }
+
+      return {
+        ...publishedListing,
+        referralRewardGranted: shouldRewardReferrer,
+      };
+    });
+
+    await this.profileService.refreshVerificationStatus(userId);
+
+    return result;
   }
 
   async pause(userId: string, listingId: string) {
