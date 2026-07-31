@@ -17,6 +17,7 @@ export interface DashboardData {
     avatarUrl: string | null;
     description: string | null;
     profileQualityScore: number | null;
+    isVerified: boolean;
 
     phone: string | null;
     whatsapp: string | null;

@@ -11,6 +11,7 @@ import type { ProfileContact } from "@/services/profile.service";
 import { boostService, type BoostStatus } from "@/services/boost.service";
 import BoostCard from "@/components/dashboard/BoostCard";
 import PremiumCard from "@/components/dashboard/PremiumCard";
+import VisibilityScoreCard from "@/components/dashboard/VisibilityScoreCard";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -139,6 +140,8 @@ export default function DashboardPage() {
           <StatCard label="Favoris" value={data.stats.favorites} />
           <StatCard label="Contacts" value={data.stats.contactClicks} />{" "}
         </section>
+
+        <VisibilityScoreCard data={data} boost={boost} />
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_1.9fr]">
           <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">

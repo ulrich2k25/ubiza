@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { api } from "@/services/api";
+import {
+  paymentsService,
+  type Payment,
+  type PremiumPlan,
+  type PricingResponse,
+} from "@/services/payments.service";
 
 interface PremiumStatus {
   isPremium: boolean;
@@ -15,17 +21,101 @@ interface PremiumStatus {
 
 export default function PremiumCard() {
   const [premium, setPremium] = useState<PremiumStatus | null>(null);
+  const [pricing, setPricing] = useState<PricingResponse | null>(null);
+
+  const [selectedPlan, setSelectedPlan] = useState<PremiumPlan>("DAYS_7");
+
+  const [phone, setPhone] = useState("");
+
+  const [showPurchase, setShowPurchase] = useState(false);
+
+  const [payment, setPayment] = useState<Payment | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  async function loadPremium() {
+    const response = await api("/premium/me");
+
+    setPremium(response as PremiumStatus);
+  }
+
+  async function loadPricing() {
+    const response = await paymentsService.getPricing();
+
+    setPricing(response);
+  }
 
   useEffect(() => {
-    api("/premium/me")
-      .then((response) => {
-        setPremium(response as PremiumStatus);
+    Promise.all([loadPremium(), loadPricing()])
+      .catch((err: Error) => {
+        setError(err.message);
       })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
+
+  async function createPayment() {
+    try {
+      setProcessing(true);
+      setError("");
+      setSuccess("");
+
+      const response = await paymentsService.createPremium(selectedPlan, phone);
+
+      setPayment(response.payment);
+
+      setSuccess("Paiement créé avec succès.");
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setProcessing(false);
+    }
+  }
+
+  async function confirmPayment() {
+    if (!payment) {
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      setError("");
+      setSuccess("");
+
+      await paymentsService.confirm(payment.id);
+
+      await loadPremium();
+
+      const refreshed = await paymentsService.getOne(payment.id);
+
+      setPayment(refreshed as Payment);
+      setSuccess("Paiement confirmé. Premium activé.");
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setProcessing(false);
+    }
+  }
+  const expirationDate = premium?.premiumActiveUntil
+    ? new Intl.DateTimeFormat("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(new Date(premium.premiumActiveUntil))
+    : null;
+
+  const selectedOffer = pricing?.premium.find(
+    (offer) => offer.plan === selectedPlan,
+  );
 
   if (loading) {
     return (
@@ -35,41 +125,33 @@ export default function PremiumCard() {
     );
   }
 
-  if (error || !premium) {
+  if (!premium || !pricing) {
     return (
       <article className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6">
         <p className="text-sm text-red-200">
-          {error || "Impossible de charger le statut Premium."}
+          {error || "Impossible de charger les informations Premium."}
         </p>
       </article>
     );
   }
 
-  const expirationDate = premium.premiumActiveUntil
-    ? new Intl.DateTimeFormat("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      }).format(new Date(premium.premiumActiveUntil))
-    : null;
-
   return (
-    <article className="flex h-full flex-col rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/5 p-6">
+    <article className="flex flex-col rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/5 p-6">
+      {" "}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-fuchsia-400">Abonnement</p>
 
-          <h3 className="mt-2 text-2xl font-bold">Premium</h3>
+          <h3 className="mt-2 text-2xl font-bold text-white">Premium</h3>
         </div>
 
         <span className="rounded-full border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-1 text-xs font-semibold text-fuchsia-300">
           {premium.isPremium ? "Actif" : "Standard"}
         </span>
       </div>
-
       {premium.isPremium ? (
         <div className="mt-6">
-          <p className="text-lg font-semibold">
+          <p className="text-lg font-semibold text-white">
             {premium.isTrial
               ? "Votre essai gratuit est actif"
               : "Votre abonnement Premium est actif"}
@@ -82,7 +164,7 @@ export default function PremiumCard() {
           <div className="mt-5 space-y-3 text-sm">
             <Benefit label="Priorité dans les résultats" />
             <Benefit label="Statut Premium visible" />
-            <Benefit label="Boosts mensuels inclus" />
+            <Benefit label="Visibilité renforcée sur Ubiza" />{" "}
           </div>
 
           <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
@@ -95,7 +177,7 @@ export default function PremiumCard() {
             </p>
 
             {expirationDate && (
-              <p className="mt-1 font-semibold">
+              <p className="mt-1 font-semibold text-white">
                 Actif jusqu’au {expirationDate}
               </p>
             )}
@@ -103,7 +185,7 @@ export default function PremiumCard() {
         </div>
       ) : (
         <div className="mt-6">
-          <p className="text-lg font-semibold">
+          <p className="text-lg font-semibold text-white">
             Augmentez la visibilité de votre profil
           </p>
 
@@ -114,16 +196,206 @@ export default function PremiumCard() {
           <div className="mt-5 space-y-3 text-sm">
             <Benefit label="Priorité dans les résultats" />
             <Benefit label="Statut Premium visible" />
-            <Benefit label="Boosts mensuels inclus" />
+            <Benefit label="Visibilité renforcée sur Ubiza" />{" "}
           </div>
         </div>
       )}
+      <div className="mt-7 border-t border-white/10 pt-6">
+        {!showPurchase ? (
+          <button
+            type="button"
+            onClick={() => {
+              setShowPurchase(true);
+              setError("");
+              setSuccess("");
+            }}
+            className="w-full rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-3 font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/20"
+          >
+            {premium.isPremium
+              ? "Prolonger mon abonnement"
+              : "Choisir un forfait Premium"}
+          </button>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm font-semibold text-white">
+                {premium.isPremium
+                  ? "Choisir une durée de prolongation"
+                  : "Choisir un forfait"}
+              </p>
 
-      <button type="button" disabled className="mt-auto pt-6">
-        <span className="block w-full cursor-not-allowed rounded-xl bg-white/10 px-4 py-3 text-center font-semibold text-zinc-400">
-          Gestion Premium bientôt disponible
-        </span>
-      </button>
+              {!payment && (
+                <button
+                  type="button"
+                  disabled={processing}
+                  onClick={() => {
+                    setShowPurchase(false);
+                    setPhone("");
+                    setPayment(null);
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
+                >
+                  Fermer
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {pricing.premium.map((offer) => {
+                const selected = selectedPlan === offer.plan;
+
+                return (
+                  <button
+                    key={offer.plan}
+                    type="button"
+                    disabled={processing || Boolean(payment)}
+                    onClick={() => setSelectedPlan(offer.plan)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      selected
+                        ? "border-fuchsia-400 bg-fuchsia-500/15"
+                        : "border-white/10 bg-black/20 hover:border-white/20"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <span className="block text-sm font-semibold text-white">
+                      {getPremiumPlanLabel(offer.plan)}
+                    </span>
+
+                    <span className="mt-2 block text-lg font-bold text-fuchsia-300">
+                      {formatAmount(offer.amount)} FCFA
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!payment && (
+              <div className="mt-5">
+                <label
+                  htmlFor="premium-phone"
+                  className="text-sm font-medium text-zinc-300"
+                >
+                  Numéro Mobile Money
+                </label>
+
+                <input
+                  id="premium-phone"
+                  type="tel"
+                  value={phone}
+                  disabled={processing}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="+237 6XX XXX XXX"
+                  autoComplete="tel"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+
+                <button
+                  type="button"
+                  disabled={processing || phone.trim().length < 8}
+                  onClick={createPayment}
+                  className="mt-4 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {processing
+                    ? "Création du paiement..."
+                    : `${premium.isPremium ? "Prolonger" : "Acheter Premium"}${
+                        selectedOffer
+                          ? ` pour ${formatAmount(selectedOffer.amount)} FCFA`
+                          : ""
+                      }`}
+                </button>
+              </div>
+            )}
+
+            {payment && (
+              <div className="mt-5 rounded-xl border border-fuchsia-400/20 bg-black/30 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-zinc-400">
+                      Paiement à effectuer
+                    </p>
+
+                    <p className="mt-1 text-xl font-bold text-white">
+                      {formatAmount(Number(payment.amount))} FCFA
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
+                    {getPaymentStatusLabel(payment.status)}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3 text-sm">
+                  <div>
+                    <p className="text-zinc-500">Référence</p>
+
+                    <p className="mt-1 break-all font-medium text-zinc-200">
+                      {payment.externalReference}
+                    </p>
+                  </div>
+
+                  {payment.customerPhone && (
+                    <div>
+                      <p className="text-zinc-500">Numéro</p>
+
+                      <p className="mt-1 font-medium text-zinc-200">
+                        {payment.customerPhone}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <p className="mt-4 text-sm leading-6 text-zinc-400">
+                  Votre abonnement sera activé dès que le paiement aura été
+                  confirmé.
+                </p>
+
+                {process.env.NODE_ENV === "development" && (
+                  <button
+                    type="button"
+                    disabled={processing || payment.status === "SUCCESS"}
+                    onClick={confirmPayment}
+                    className="mt-4 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {processing
+                      ? "Confirmation..."
+                      : payment.status === "SUCCESS"
+                        ? "Paiement confirmé"
+                        : "Confirmer le paiement de test"}
+                  </button>
+                )}
+
+                {payment.status !== "SUCCESS" && (
+                  <button
+                    type="button"
+                    disabled={processing}
+                    onClick={() => {
+                      setPayment(null);
+                      setSuccess("");
+                      setError("");
+                    }}
+                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Annuler et choisir un autre forfait
+                  </button>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <p className="text-sm text-emerald-200">{success}</p>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
@@ -138,4 +410,31 @@ function Benefit({ label }: { label: string }) {
       <span className="text-zinc-300">{label}</span>
     </div>
   );
+}
+
+function getPremiumPlanLabel(plan: PremiumPlan) {
+  const labels: Record<PremiumPlan, string> = {
+    DAY_1: "1 jour",
+    DAYS_7: "7 jours",
+    DAYS_30: "30 jours",
+  };
+
+  return labels[plan];
+}
+
+function getPaymentStatusLabel(status: Payment["status"]) {
+  const labels: Record<Payment["status"], string> = {
+    PENDING: "En attente",
+    PROCESSING: "En cours",
+    SUCCESS: "Payé",
+    FAILED: "Échoué",
+    CANCELLED: "Annulé",
+    EXPIRED: "Expiré",
+  };
+
+  return labels[status];
+}
+
+function formatAmount(amount: number) {
+  return new Intl.NumberFormat("fr-FR").format(amount);
 }

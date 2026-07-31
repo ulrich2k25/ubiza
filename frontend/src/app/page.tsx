@@ -9,6 +9,7 @@ import PopularCities from "@/components/home/PopularCities";
 import { publicProfileService } from "@/services/public-profile.service";
 import { storyService } from "@/services/story.service";
 import SiteFooter from "@/components/layout/SiteFooter";
+import AmbassadorFloatingBanner from "@/components/home/AmbassadorFloatingBanner";
 
 export default async function Home() {
   const [creators, stories] = await Promise.all([
@@ -19,6 +20,8 @@ export default async function Home() {
   return (
     <main className="min-h-screen bg-black text-white">
       <HomeNavbar />
+
+      <AmbassadorFloatingBanner />
 
       <HomeHero />
 

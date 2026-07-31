@@ -14,6 +14,17 @@ export interface RegisterData {
   referralCode?: string;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: "USER" | "ADMIN";
+}
+
+interface AuthMeResponse {
+  message: string;
+  user: AuthUser;
+}
+
 export const authService = {
   async register(data: RegisterData) {
     return api("/auth/register", {
@@ -35,12 +46,35 @@ export const authService = {
     return response;
   },
 
-  async me() {
-    return api("/auth/me");
+  async me(): Promise<AuthUser> {
+    const response = (await api("/auth/me")) as AuthMeResponse;
+
+    return response.user;
+  },
+
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    return api("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+      }),
+    });
+  },
+
+  async resetPassword(
+    token: string,
+    password: string,
+  ): Promise<{ message: string }> {
+    return api("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({
+        token,
+        password,
+      }),
+    });
   },
 
   logout() {
     localStorage.removeItem("token");
   },
 };
-

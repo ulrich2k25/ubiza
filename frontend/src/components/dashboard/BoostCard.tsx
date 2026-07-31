@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
+import { useSearchParams } from "next/navigation";
 import { boostService, type BoostStatus } from "@/services/boost.service";
+import {
+  paymentsService,
+  type Payment,
+  type PricingResponse,
+} from "@/services/payments.service";
 
 interface BoostCardProps {
   boost: BoostStatus;
@@ -11,8 +16,56 @@ interface BoostCardProps {
 
 export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
   const [remaining, setRemaining] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [pricing, setPricing] = useState<PricingResponse | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null);
+
+  const [phone, setPhone] = useState("");
+  const [showPurchase, setShowPurchase] = useState(false);
+  const searchParams = useSearchParams();
+
+  const [loadingPricing, setLoadingPricing] = useState(true);
+  const [activatingCredit, setActivatingCredit] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [refreshingAfterExpiry, setRefreshingAfterExpiry] = useState(false);
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const boostOffer = pricing?.boost.find(
+    (offer) => offer.duration === "MINUTES_60",
+  );
+
+  useEffect(() => {
+    paymentsService
+      .getPricing()
+      .then(setPricing)
+      .catch((err: Error) => {
+        setError(err.message);
+      })
+      .finally(() => {
+        setLoadingPricing(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    const shouldOpen = searchParams.get("openBoost") === "1";
+
+    if (!shouldOpen) {
+      return;
+    }
+
+    setShowPurchase(true);
+
+    const timer = window.setTimeout(() => {
+      document.getElementById("boost")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!boost.isBoostActive || !boost.boostActiveUntil) {
@@ -26,9 +79,9 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
 
     const updateCountdown = async () => {
       const end = new Date(boost.boostActiveUntil!).getTime();
-      const diff = end - Date.now();
+      const difference = end - Date.now();
 
-      if (diff <= 0) {
+      if (difference <= 0) {
         setRemaining("00:00:00");
 
         if (interval) {
@@ -44,6 +97,8 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
             if (!isCancelled) {
               onUpdated(status);
             }
+          } catch (err) {
+            console.error("Erreur lors du rafraîchissement du Boost :", err);
           } finally {
             if (!isCancelled) {
               setRefreshingAfterExpiry(false);
@@ -54,9 +109,9 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
         return;
       }
 
-      const hours = Math.floor(diff / 3_600_000);
-      const minutes = Math.floor((diff % 3_600_000) / 60_000);
-      const seconds = Math.floor((diff % 60_000) / 1_000);
+      const hours = Math.floor(difference / 3_600_000);
+      const minutes = Math.floor((difference % 3_600_000) / 60_000);
+      const seconds = Math.floor((difference % 60_000) / 1_000);
 
       setRemaining(
         `${hours.toString().padStart(2, "0")}:${minutes
@@ -85,66 +140,408 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
     refreshingAfterExpiry,
   ]);
 
-  async function activateBoost() {
-    setLoading(true);
-
+  async function activateCreditBoost() {
     try {
+      setActivatingCredit(true);
+      setError("");
+      setSuccess("");
+
       await boostService.activate();
 
       const status = await boostService.getStatus();
 
       onUpdated(status);
-    } catch (error) {
-      console.error("Erreur lors de l’activation du Boost :", error);
+      setSuccess("Votre Boost gratuit est maintenant actif.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Impossible d’activer le Boost.",
+      );
     } finally {
-      setLoading(false);
+      setActivatingCredit(false);
     }
   }
 
-  const isActivationDisabled =
-    loading || boost.isBoostActive || boost.boostCredits === 0;
+  async function createPaidBoost() {
+    try {
+      setProcessingPayment(true);
+      setError("");
+      setSuccess("");
+
+      const response = await paymentsService.createBoost("MINUTES_60", phone);
+
+      setPayment(response.payment);
+      setSuccess("Votre demande de paiement a bien été enregistrée.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Impossible de créer le paiement.",
+      );
+    } finally {
+      setProcessingPayment(false);
+    }
+  }
+
+  async function confirmPaidBoost() {
+    if (!payment) {
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
+      setError("");
+      setSuccess("");
+
+      await paymentsService.confirm(payment.id);
+
+      const refreshedPayment = await paymentsService.getOne(payment.id);
+
+      setPayment(refreshedPayment as Payment);
+
+      const status = await boostService.getStatus();
+
+      onUpdated(status);
+
+      setShowPurchase(false);
+      setPhone("");
+
+      setSuccess("Paiement confirmé. Votre annonce est maintenant boostée.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de confirmer le paiement.",
+      );
+    } finally {
+      setProcessingPayment(false);
+    }
+  }
+
+  const isBusy = activatingCredit || processingPayment;
 
   return (
-    <article className="rounded-3xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/5 p-6">
-      <p className="text-sm font-medium text-fuchsia-400">🚀 Boost</p>
+    <article
+      id="boost"
+      className="flex h-full flex-col overflow-hidden rounded-3xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 via-violet-500/5 to-transparent"
+    >
+      <div className="p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-fuchsia-400">
+              🚀 Mise en avant
+            </p>
 
-      <h2 className="mt-2 text-3xl font-bold">{boost.boostCredits}</h2>
+            <h2 className="mt-2 text-2xl font-bold text-white">Boost</h2>
+          </div>
 
-      <p className="mt-2 text-sm text-zinc-400">Crédit(s) disponible(s)</p>
-
-      {boost.isBoostActive ? (
-        <div className="mt-5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-          <p className="font-semibold text-emerald-300">🚀 Boost actif</p>
-
-          <p className="mt-2 text-sm text-zinc-400">Temps restant</p>
-
-          <p className="mt-1 font-mono text-3xl font-bold text-white">
-            {remaining || "Calcul..."}
-          </p>
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+              boost.isBoostActive
+                ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+                : "border-white/10 bg-white/5 text-zinc-400"
+            }`}
+          >
+            {boost.isBoostActive ? "Actif" : "Inactif"}
+          </span>
         </div>
-      ) : (
-        <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <p className="text-sm text-zinc-400">
-            Votre annonce n&apos;est pas boostée actuellement.
-          </p>
-        </div>
-      )}
 
-      <button
-        type="button"
-        disabled={isActivationDisabled}
-        onClick={activateBoost}
-        className="mt-6 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {loading
-          ? "Activation..."
-          : boost.isBoostActive
-            ? "Boost actif"
-            : boost.boostCredits === 0
-              ? "Aucun crédit disponible"
-              : "Activer un Boost (1 heure)"}
-      </button>
+        <p className="mt-4 max-w-md text-sm leading-6 text-zinc-400">
+          Placez temporairement votre annonce devant davantage de visiteurs et
+          augmentez vos chances d’être contacté.
+        </p>
+
+        {boost.isBoostActive ? (
+          <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15 text-xl">
+                🚀
+              </span>
+
+              <div>
+                <p className="font-semibold text-emerald-300">
+                  Votre annonce est boostée
+                </p>
+
+                <p className="mt-1 text-sm text-zinc-400">
+                  Elle bénéficie actuellement d’une visibilité renforcée.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4">
+              <p className="text-sm text-zinc-400">Temps restant</p>
+
+              <p className="mt-2 font-mono text-3xl font-bold tracking-wide text-white">
+                {remaining || "Calcul..."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-sm text-zinc-400">Crédits disponibles</p>
+
+                <p className="mt-2 text-3xl font-bold text-white">
+                  {boost.boostCredits}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                <p className="text-sm text-zinc-400">Durée d’un Boost</p>
+
+                <p className="mt-2 text-2xl font-bold text-fuchsia-300">
+                  1 heure
+                </p>
+              </div>
+            </div>
+
+            {boost.boostCredits > 0 && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={activateCreditBoost}
+                className="mt-5 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {activatingCredit ? "Activation..." : "Utiliser 1 crédit Boost"}
+              </button>
+            )}
+
+            {!showPurchase && (
+              <button
+                type="button"
+                disabled={isBusy || loadingPricing}
+                onClick={() => {
+                  setShowPurchase(true);
+                  setError("");
+                  setSuccess("");
+                }}
+                className={`w-full rounded-xl px-5 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  boost.boostCredits > 0
+                    ? "mt-3 border border-white/10 bg-white/5 text-zinc-200 hover:bg-white/10"
+                    : "mt-5 bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white hover:opacity-90"
+                }`}
+              >
+                {loadingPricing
+                  ? "Chargement du tarif..."
+                  : boostOffer
+                    ? `Acheter un Boost — ${formatAmount(
+                        boostOffer.amount,
+                      )} FCFA`
+                    : "Acheter un Boost"}
+              </button>
+            )}
+          </>
+        )}
+
+        {!boost.isBoostActive && showPurchase && (
+          <div className="mt-6 rounded-2xl border border-fuchsia-400/20 bg-black/25 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-semibold text-white">Acheter un Boost</p>
+
+                <p className="mt-1 text-sm text-zinc-400">
+                  Votre annonce sera mise en avant pendant 1 heure.
+                </p>
+              </div>
+
+              {!payment && (
+                <button
+                  type="button"
+                  disabled={processingPayment}
+                  onClick={() => {
+                    setShowPurchase(false);
+                    setPhone("");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
+                >
+                  Fermer
+                </button>
+              )}
+            </div>
+
+            {boostOffer && (
+              <div className="mt-5 flex items-center justify-between rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    Boost 1 heure
+                  </p>
+
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Mise en avant immédiate après confirmation
+                  </p>
+                </div>
+
+                <p className="text-xl font-bold text-fuchsia-300">
+                  {formatAmount(boostOffer.amount)} FCFA
+                </p>
+              </div>
+            )}
+
+            {!payment && (
+              <div className="mt-5">
+                <label
+                  htmlFor="boost-phone"
+                  className="text-sm font-medium text-zinc-300"
+                >
+                  Numéro Mobile Money
+                </label>
+
+                <input
+                  id="boost-phone"
+                  type="tel"
+                  value={phone}
+                  disabled={processingPayment}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="+237 6XX XXX XXX"
+                  autoComplete="tel"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+
+                <button
+                  type="button"
+                  disabled={
+                    processingPayment || phone.trim().length < 8 || !boostOffer
+                  }
+                  onClick={createPaidBoost}
+                  className="mt-4 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {processingPayment
+                    ? "Création du paiement..."
+                    : boostOffer
+                      ? `Continuer — ${formatAmount(boostOffer.amount)} FCFA`
+                      : "Continuer"}
+                </button>
+              </div>
+            )}
+
+            {payment && (
+              <div className="mt-5 rounded-xl border border-white/10 bg-black/30 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-zinc-400">Montant à payer</p>
+
+                    <p className="mt-1 text-xl font-bold text-white">
+                      {formatAmount(Number(payment.amount))} FCFA
+                    </p>
+                  </div>
+
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPaymentStatusClasses(
+                      payment.status,
+                    )}`}
+                  >
+                    {getPaymentStatusLabel(payment.status)}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3 text-sm">
+                  <div>
+                    <p className="text-zinc-500">Référence du paiement</p>
+
+                    <p className="mt-1 break-all font-medium text-zinc-200">
+                      {payment.externalReference}
+                    </p>
+                  </div>
+
+                  {payment.customerPhone && (
+                    <div>
+                      <p className="text-zinc-500">Numéro Mobile Money</p>
+
+                      <p className="mt-1 font-medium text-zinc-200">
+                        {payment.customerPhone}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <p className="mt-4 text-sm leading-6 text-zinc-400">
+                  Votre Boost sera activé automatiquement dès la confirmation du
+                  paiement.
+                </p>
+
+                {process.env.NODE_ENV === "development" && (
+                  <button
+                    type="button"
+                    disabled={processingPayment || payment.status === "SUCCESS"}
+                    onClick={confirmPaidBoost}
+                    className="mt-4 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {processingPayment
+                      ? "Confirmation..."
+                      : payment.status === "SUCCESS"
+                        ? "Paiement confirmé"
+                        : "Confirmer le paiement de test"}
+                  </button>
+                )}
+
+                {payment.status !== "SUCCESS" && (
+                  <button
+                    type="button"
+                    disabled={processingPayment}
+                    onClick={() => {
+                      setPayment(null);
+                      setError("");
+                      setSuccess("");
+                    }}
+                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Annuler le paiement
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <p className="text-sm text-emerald-200">{success}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto border-t border-white/10 bg-black/10 px-6 py-4">
+        <p className="text-xs leading-5 text-zinc-500">
+          Un Boost ne peut pas être acheté lorsqu’un autre Boost est encore
+          actif.
+        </p>
+      </div>
     </article>
   );
 }
 
+function getPaymentStatusLabel(status: Payment["status"]) {
+  const labels: Record<Payment["status"], string> = {
+    PENDING: "En attente",
+    PROCESSING: "En cours",
+    SUCCESS: "Payé",
+    FAILED: "Échoué",
+    CANCELLED: "Annulé",
+    EXPIRED: "Expiré",
+  };
+
+  return labels[status];
+}
+
+function getPaymentStatusClasses(status: Payment["status"]) {
+  if (status === "SUCCESS") {
+    return "border-emerald-400/20 bg-emerald-400/10 text-emerald-300";
+  }
+
+  if (status === "FAILED" || status === "CANCELLED" || status === "EXPIRED") {
+    return "border-red-400/20 bg-red-400/10 text-red-300";
+  }
+
+  return "border-amber-400/20 bg-amber-400/10 text-amber-300";
+}
+
+function formatAmount(amount: number) {
+  return new Intl.NumberFormat("fr-FR").format(amount);
+}

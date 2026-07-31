@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { authService } from "@/features/auth/auth.service";
 import { listingService } from "@/services/listing.service";
@@ -16,25 +22,28 @@ interface AuthContextType {
   isAuthReady: boolean;
   user: AuthUser | null;
   hasListing: boolean;
+  isAdmin: boolean;
   logout: () => void;
   refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [hasListing, setHasListing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  async function refreshAuth() {
+  async function refreshAuth(): Promise<void> {
     const token = localStorage.getItem("token");
 
     setIsAuthReady(false);
-    setHasListing(false);
-    setUser(null);
     setIsAuthenticated(false);
+    setUser(null);
+    setHasListing(false);
+    setIsAdmin(false);
 
     if (!token) {
       setIsAuthReady(true);
@@ -42,43 +51,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await authService.me();
+      const authenticatedUser = await authService.me();
 
-      setUser(response.user);
+      setUser(authenticatedUser);
       setIsAuthenticated(true);
+      setIsAdmin(authenticatedUser.role === "ADMIN");
 
       try {
         const listing = await listingService.getMyListing();
-
-        setHasListing(Boolean(listing?.id));
+        setHasListing(Boolean(listing));
       } catch {
         setHasListing(false);
       }
     } catch {
       localStorage.removeItem("token");
 
-      setIsAuthenticated(false);
       setUser(null);
+      setIsAuthenticated(false);
       setHasListing(false);
+      setIsAdmin(false);
     } finally {
       setIsAuthReady(true);
     }
   }
 
-  useEffect(() => {
-    refreshAuth();
-  }, []);
+  function logout(): void {
+    localStorage.removeItem("token");
 
-  function logout() {
-    authService.logout();
-
-    setIsAuthenticated(false);
     setUser(null);
+    setIsAuthenticated(false);
     setHasListing(false);
+    setIsAdmin(false);
     setIsAuthReady(true);
-
-    window.location.href = "/";
   }
+
+  useEffect(() => {
+    void refreshAuth();
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -87,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthReady,
         user,
         hasListing,
+        isAdmin,
         logout,
         refreshAuth,
       }}
@@ -96,13 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("useAuth doit être utilisé dans AuthProvider");
+    throw new Error("useAuth doit être utilisé dans un AuthProvider.");
   }
 
   return context;
 }
-

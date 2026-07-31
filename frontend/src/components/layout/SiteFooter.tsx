@@ -57,19 +57,19 @@ export default function SiteFooter() {
 
           <ul className="space-y-3">
             <li>
-              <Link href="/about" className={footerLinkClass}>
+              <Link href="/informations/a-propos" className={footerLinkClass}>
                 À propos
               </Link>
             </li>
 
             <li>
-              <Link href="/contact" className={footerLinkClass}>
+              <Link href="/informations/contact" className={footerLinkClass}>
                 Contact
               </Link>
             </li>
 
             <li>
-              <Link href="/faq" className={footerLinkClass}>
+              <Link href="/informations/faq" className={footerLinkClass}>
                 FAQ
               </Link>
             </li>
@@ -81,19 +81,22 @@ export default function SiteFooter() {
 
           <ul className="space-y-3">
             <li>
-              <Link href="/terms" className={footerLinkClass}>
+              <Link href="/informations/conditions" className={footerLinkClass}>
                 Conditions d&apos;utilisation
               </Link>
             </li>
 
             <li>
-              <Link href="/privacy" className={footerLinkClass}>
+              <Link
+                href="/informations/confidentialite"
+                className={footerLinkClass}
+              >
                 Politique de confidentialité
               </Link>
             </li>
 
             <li>
-              <Link href="/legal" className={footerLinkClass}>
+              <Link href="/informations/mentions" className={footerLinkClass}>
                 Mentions légales
               </Link>
             </li>
@@ -109,4 +112,3 @@ export default function SiteFooter() {
     </footer>
   );
 }
-

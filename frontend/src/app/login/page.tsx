@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { authService } from "@/features/auth/auth.service";
 import { listingService } from "@/services/listing.service";
 import { useAuth } from "@/providers/AuthProvider";
+import Link from "next/link";
 
 export default function LoginPage() {
   return (
@@ -189,12 +190,18 @@ function LoginContent() {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="mb-2 block text-sm text-zinc-300"
-            >
-              Mot de passe
-            </label>
+            <div className="mb-2 flex items-center justify-between gap-4">
+              <label htmlFor="password" className="text-sm text-zinc-300">
+                Mot de passe
+              </label>
+
+              <Link
+                href="/forgot-password"
+                className="text-sm font-semibold text-fuchsia-400 transition hover:text-fuchsia-300"
+              >
+                Mot de passe oublié ?
+              </Link>
+            </div>
 
             <input
               id="password"
@@ -206,21 +213,21 @@ function LoginContent() {
               disabled={isSubmitting}
               autoComplete="current-password"
               className="
-                w-full
-                rounded-2xl
-                border
-                border-white/10
-                bg-black/40
-                px-5
-                py-4
-                text-white
-                outline-none
-                placeholder:text-zinc-600
-                transition
-                focus:border-fuchsia-500
-                disabled:cursor-not-allowed
-                disabled:opacity-60
-              "
+      w-full
+      rounded-2xl
+      border
+      border-white/10
+      bg-black/40
+      px-5
+      py-4
+      text-white
+      outline-none
+      placeholder:text-zinc-600
+      transition
+      focus:border-fuchsia-500
+      disabled:cursor-not-allowed
+      disabled:opacity-60
+    "
             />
           </div>
         </div>
@@ -273,4 +280,3 @@ function LoginLoading() {
     </main>
   );
 }
-
