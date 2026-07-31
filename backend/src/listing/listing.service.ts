@@ -166,7 +166,6 @@ export class ListingService {
       },
       select: {
         referredById: true,
-        referralRewardGrantedAt: true,
       },
     });
 
@@ -175,12 +174,6 @@ export class ListingService {
     }
 
     const isFirstPublication = listing.publishedAt === null;
-
-    const shouldRewardReferrer =
-      isFirstPublication &&
-      user.referredById !== null &&
-      user.referralRewardGrantedAt === null;
-
     const publishedAt = listing.publishedAt ?? new Date();
 
     const result = await this.prisma.$transaction(async (transaction) => {
@@ -195,31 +188,43 @@ export class ListingService {
         },
       });
 
-      if (shouldRewardReferrer && user.referredById) {
-        await transaction.user.update({
-          where: {
-            id: user.referredById,
-          },
-          data: {
-            boostCredits: {
-              increment: 1,
-            },
-          },
-        });
+      let referralRewardGranted = false;
 
-        await transaction.user.update({
+      if (isFirstPublication && user.referredById) {
+        /*
+         * Cette mise à jour sert de verrou logique.
+         * Une seule requête peut remplacer null par une date.
+         */
+        const rewardReservation = await transaction.user.updateMany({
           where: {
             id: userId,
+            referralRewardGrantedAt: null,
+            referredById: user.referredById,
           },
           data: {
             referralRewardGrantedAt: new Date(),
           },
         });
+
+        if (rewardReservation.count === 1) {
+          await transaction.user.update({
+            where: {
+              id: user.referredById,
+            },
+            data: {
+              boostCredits: {
+                increment: 1,
+              },
+            },
+          });
+
+          referralRewardGranted = true;
+        }
       }
 
       return {
         ...publishedListing,
-        referralRewardGranted: shouldRewardReferrer,
+        referralRewardGranted,
       };
     });
 

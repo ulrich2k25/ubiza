@@ -21,6 +21,8 @@ import { BoostsModule } from './boosts/boosts.module';
 import { MailModule } from './mail/mail.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { PremiumModule } from './premium/premium.module';
+import { PaymentsModule } from './payments/payments.module';
+import { AmbassadorsModule } from './ambassadors/ambassadors.module';
 
 @Module({
   imports: [
@@ -44,6 +46,8 @@ import { PremiumModule } from './premium/premium.module';
     MailModule,
     FavoritesModule,
     PremiumModule,
+    PaymentsModule,
+    AmbassadorsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

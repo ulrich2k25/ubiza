@@ -858,6 +858,7 @@ model Payment {
 
   premiumSubscription PremiumSubscription?
   boost               Boost?
+  commission          Commission?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -881,9 +882,22 @@ model Ambassador {
 
   referralCode String           @unique
   status       AmbassadorStatus @default(PENDING)
+  fullName          String?
+mobileMoneyNumber String?
+identityNumber    String?
+country           String?
+termsAcceptedAt   DateTime?
+
+rejectionReason String?
+rejectedAt      DateTime?
 
   approvedAt  DateTime?
   suspendedAt DateTime?
+
+  identityVerifiedAt DateTime?
+  identityVerificationRequestedAt DateTime?
+
+  minimumPayout Decimal @default(5000) @db.Decimal(12, 2)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -903,8 +917,10 @@ model Referral {
   ambassadorId   String
   referredUserId String @unique
 
-  status      ReferralStatus @default(PENDING)
-  validatedAt DateTime?
+  status                       ReferralStatus @default(PENDING)
+  validatedAt                  DateTime?
+  firstPurchaseRewardGranted   Boolean        @default(false)
+  firstPurchaseRewardGrantedAt DateTime?
 
   ambassador   Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
   referredUser User       @relation("ReferredUsers", fields: [referredUserId], references: [id], onDelete: Cascade)
@@ -916,6 +932,7 @@ model Referral {
 
   @@index([ambassadorId])
   @@index([status])
+  @@index([firstPurchaseRewardGranted])
 }
 
 model Commission {
@@ -924,6 +941,7 @@ model Commission {
   ambassadorId String
   referralId   String?
   currencyId   String
+  paymentId    String? @unique
 
   amount Decimal          @db.Decimal(12, 2)
   status CommissionStatus @default(PENDING)
@@ -935,6 +953,7 @@ model Commission {
   ambassador Ambassador @relation(fields: [ambassadorId], references: [id], onDelete: Cascade)
   referral   Referral?  @relation(fields: [referralId], references: [id], onDelete: SetNull)
   currency   Currency   @relation(fields: [currencyId], references: [id])
+  payment    Payment?   @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   payoutItems PayoutItem[]
 

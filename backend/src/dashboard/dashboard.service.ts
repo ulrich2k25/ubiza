@@ -15,6 +15,7 @@ export class DashboardService {
       select: {
         id: true,
         email: true,
+        emailVerifiedAt: true,
         role: true,
         status: true,
         trustScore: true,
@@ -122,6 +123,15 @@ export class DashboardService {
 
     const listing = user.listings[0] ?? null;
 
+    const hasContact = Boolean(
+      user.profile?.phone || user.profile?.whatsapp || user.profile?.telegram,
+    );
+
+    const isVerified =
+      Boolean(user.emailVerifiedAt) &&
+      hasContact &&
+      listing?.status === 'PUBLISHED';
+
     return {
       user: {
         id: user.id,
@@ -133,7 +143,12 @@ export class DashboardService {
         createdAt: user.createdAt,
       },
 
-      profile: user.profile,
+      profile: user.profile
+        ? {
+            ...user.profile,
+            isVerified,
+          }
+        : null,
 
       listing: listing
         ? {

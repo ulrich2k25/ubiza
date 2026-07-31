@@ -292,6 +292,128 @@ export class AuthService {
     };
   }
 
+  async forgotPassword(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: normalizedEmail,
+      },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    // Réponse volontairement identique même si l'utilisateur n'existe pas.
+    // Cela évite de révéler quelles adresses sont inscrites.
+    if (!user) {
+      return {
+        message:
+          'Si un compte existe avec cette adresse e-mail, un lien de réinitialisation a été envoyé.',
+      };
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+
+    const hashedToken = createHash('sha256').update(rawToken).digest('hex');
+
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+    await this.prisma.$transaction([
+      this.prisma.verificationToken.deleteMany({
+        where: {
+          userId: user.id,
+          type: 'PASSWORD_RESET',
+          usedAt: null,
+        },
+      }),
+
+      this.prisma.verificationToken.create({
+        data: {
+          userId: user.id,
+          token: hashedToken,
+          type: 'PASSWORD_RESET',
+          expiresAt,
+        },
+      }),
+    ]);
+
+    await this.mailService.sendPasswordResetEmail(user.email, rawToken);
+
+    return {
+      message:
+        'Si un compte existe avec cette adresse e-mail, un lien de réinitialisation a été envoyé.',
+    };
+  }
+
+  async resetPassword(token: string, password: string) {
+    const hashedToken = createHash('sha256').update(token).digest('hex');
+
+    const resetToken = await this.prisma.verificationToken.findUnique({
+      where: {
+        token: hashedToken,
+      },
+    });
+
+    if (!resetToken || resetToken.type !== 'PASSWORD_RESET') {
+      throw new BadRequestException(
+        'Le lien de réinitialisation est invalide.',
+      );
+    }
+
+    if (resetToken.usedAt) {
+      throw new BadRequestException(
+        'Ce lien de réinitialisation a déjà été utilisé.',
+      );
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      throw new BadRequestException('Ce lien de réinitialisation a expiré.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: {
+          id: resetToken.userId,
+        },
+        data: {
+          passwordHash,
+        },
+      }),
+
+      this.prisma.verificationToken.update({
+        where: {
+          id: resetToken.id,
+        },
+        data: {
+          usedAt: new Date(),
+        },
+      }),
+
+      this.prisma.verificationToken.updateMany({
+        where: {
+          userId: resetToken.userId,
+          type: 'PASSWORD_RESET',
+          usedAt: null,
+          id: {
+            not: resetToken.id,
+          },
+        },
+        data: {
+          usedAt: new Date(),
+        },
+      }),
+    ]);
+
+    return {
+      message:
+        'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
+    };
+  }
+
   async login(dto: LoginDto) {
     const normalizedEmail = dto.email.trim().toLowerCase();
 

@@ -8,5 +8,6 @@ import { ReferralsService } from './referrals.service';
   imports: [PrismaModule],
   controllers: [ReferralsController],
   providers: [ReferralsService],
+  exports: [ReferralsService],
 })
 export class ReferralsModule {}
