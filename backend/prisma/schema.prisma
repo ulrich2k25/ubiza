@@ -137,9 +137,8 @@ enum PremiumSubscriptionStatus {
 }
 
 enum PaymentProvider {
-  KPAY
-  CINETPAY
   MANUAL
+  CAMPAY
 }
 
 enum PaymentPurpose {

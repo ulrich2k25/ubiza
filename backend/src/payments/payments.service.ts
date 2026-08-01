@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import {
 } from './dto/initiate-payment.dto';
 import { PaymentPricingService } from './payment-pricing.service';
 import { ReferralsService } from '../referrals/referrals.service';
+import { CamPayService } from './campay/campay.service';
+import type { CamPayWebhookPayload } from './campay/campay.types';
 
 const PAYMENT_EXPIRATION_MINUTES = 30;
 
@@ -26,6 +29,7 @@ export class PaymentsService {
     private readonly paymentPricingService: PaymentPricingService,
     private readonly configService: ConfigService,
     private readonly referralsService: ReferralsService,
+    private readonly camPayService: CamPayService,
   ) {}
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
@@ -115,7 +119,7 @@ export class PaymentsService {
         data: {
           userId,
           currencyId: currency.id,
-          provider: 'MANUAL',
+          provider: 'CAMPAY',
           purpose: dto.purpose,
           status: 'PENDING',
           amount: price.amount,
@@ -148,11 +152,89 @@ export class PaymentsService {
       });
     });
 
+    if (!payment.externalReference) {
+      throw new InternalServerErrorException(
+        'La référence interne du paiement est absente.',
+      );
+    }
+
+    if (!dto.customerPhone?.trim()) {
+      throw new BadRequestException('Le numéro Mobile Money est obligatoire.');
+    }
+    let camPayResponse;
+
+    try {
+      camPayResponse = await this.camPayService.collect({
+        amount: price.amount,
+        phoneNumber: dto.customerPhone.trim(),
+        description: price.description,
+        externalReference: payment.externalReference,
+      });
+    } catch (error) {
+      await this.prisma.payment.update({
+        where: {
+          id: payment.id,
+        },
+        data: {
+          status: 'FAILED',
+          failedAt: new Date(),
+          failureReason:
+            error instanceof Error
+              ? error.message
+              : "CamPay n'a pas pu initialiser le paiement.",
+        },
+      });
+
+      throw error;
+    }
+
+    const updatedPayment = await this.prisma.payment.update({
+      where: {
+        id: payment.id,
+      },
+      data: {
+        providerTransactionId: camPayResponse.reference,
+        providerData: {
+          description: price.description,
+          premiumPlan: price.premiumPlan ?? null,
+          boostDurationMinutes: price.durationMinutes ?? null,
+          campay: camPayResponse,
+        },
+      },
+      select: {
+        id: true,
+        provider: true,
+        purpose: true,
+        status: true,
+        amount: true,
+        externalReference: true,
+        providerTransactionId: true,
+        customerPhone: true,
+        expiresAt: true,
+        initiatedAt: true,
+        currency: {
+          select: {
+            code: true,
+            symbol: true,
+          },
+        },
+      },
+    });
     return {
-      message: 'Paiement initialisé.',
+      message:
+        camPayResponse.message ??
+        'Paiement Mobile Money initialisé. Validez la demande sur votre téléphone.',
+
       payment: {
-        ...payment,
-        amount: payment.amount.toString(),
+        ...updatedPayment,
+        amount: updatedPayment.amount.toString(),
+      },
+
+      campay: {
+        reference: camPayResponse.reference,
+        status: camPayResponse.status,
+        operator: camPayResponse.operator ?? null,
+        ussdCode: camPayResponse.ussd_code ?? null,
       },
     };
   }
@@ -418,7 +500,391 @@ export class PaymentsService {
       ...result,
     };
   }
+  async handleCamPayWebhook(payload: CamPayWebhookPayload) {
+    const jwtPayload = this.camPayService.verifyWebhookSignature(
+      payload.signature,
+    );
 
+    console.dir(jwtPayload, {
+      depth: null,
+    });
+    const reference = payload.reference?.trim();
+
+    if (!reference) {
+      throw new BadRequestException(
+        'La référence CamPay est absente du webhook.',
+      );
+    }
+
+    /*
+     * Nous ne faisons pas confiance directement au statut reçu dans le webhook.
+     * Nous demandons à CamPay le statut réel de la transaction.
+     */
+    const camPayTransaction =
+      await this.camPayService.getTransactionStatus(reference);
+
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        provider: 'CAMPAY',
+        providerTransactionId: reference,
+      },
+      select: {
+        id: true,
+        userId: true,
+        provider: true,
+        purpose: true,
+        status: true,
+        amount: true,
+        externalReference: true,
+        providerTransactionId: true,
+        expiresAt: true,
+        paidAt: true,
+        currency: {
+          select: {
+            id: true,
+            code: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(
+        'Aucun paiement Ubiza ne correspond à cette référence CamPay.',
+      );
+    }
+
+    /*
+     * Vérification de la référence interne lorsque CamPay la retourne.
+     */
+    if (
+      camPayTransaction.external_reference &&
+      camPayTransaction.external_reference !== payment.externalReference
+    ) {
+      throw new BadRequestException(
+        'La référence interne du paiement ne correspond pas.',
+      );
+    }
+
+    /*
+     * Vérification de la devise.
+     */
+    if (
+      camPayTransaction.currency &&
+      camPayTransaction.currency !== payment.currency.code
+    ) {
+      throw new BadRequestException(
+        'La devise retournée par CamPay ne correspond pas au paiement.',
+      );
+    }
+
+    /*
+     * Vérification du montant.
+     * Les montants XAF utilisés par Ubiza sont des nombres entiers.
+     */
+    const isSandbox =
+      this.configService
+        .get<string>('CAMPAY_BASE_URL')
+        ?.includes('demo.campay.net') ?? false;
+
+    if (
+      !isSandbox &&
+      camPayTransaction.amount !== undefined &&
+      Number(camPayTransaction.amount) !== Number(payment.amount.toString())
+    ) {
+      throw new BadRequestException(
+        'Le montant retourné par CamPay ne correspond pas au paiement.',
+      );
+    }
+
+    const camPayStatus = camPayTransaction.status?.trim().toUpperCase();
+
+    if (!camPayStatus) {
+      throw new BadRequestException(
+        "CamPay n'a retourné aucun statut pour cette transaction.",
+      );
+    }
+
+    if (!camPayStatus) {
+      throw new BadRequestException(
+        "CamPay n'a retourné aucun statut pour cette transaction.",
+      );
+    }
+
+    /*
+     * La transaction est encore en cours.
+     * On n’active rien et on attend le prochain webhook.
+     */
+    if (
+      camPayStatus === 'PENDING' ||
+      camPayStatus === 'PROCESSING' ||
+      camPayStatus === 'INITIATED'
+    ) {
+      await this.prisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'PROCESSING',
+        },
+      });
+
+      return {
+        received: true,
+        paymentId: payment.id,
+        reference,
+        ubizaStatus: 'PROCESSING',
+        camPayStatus,
+      };
+    }
+
+    /*
+     * CamPay indique que le paiement a échoué ou a été annulé.
+     */
+    if (
+      camPayStatus === 'FAILED' ||
+      camPayStatus === 'CANCELLED' ||
+      camPayStatus === 'CANCELED' ||
+      camPayStatus === 'EXPIRED'
+    ) {
+      const failedAt = new Date();
+
+      await this.prisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: {
+            in: ['PENDING', 'PROCESSING'],
+          },
+        },
+        data: {
+          status:
+            camPayStatus === 'EXPIRED'
+              ? 'EXPIRED'
+              : camPayStatus === 'CANCELLED' || camPayStatus === 'CANCELED'
+                ? 'CANCELLED'
+                : 'FAILED',
+          failedAt: camPayStatus === 'FAILED' ? failedAt : undefined,
+          cancelledAt:
+            camPayStatus === 'CANCELLED' || camPayStatus === 'CANCELED'
+              ? failedAt
+              : undefined,
+          failureReason:
+            camPayTransaction.message ??
+            `CamPay a retourné le statut ${camPayStatus}.`,
+        },
+      });
+
+      return {
+        received: true,
+        paymentId: payment.id,
+        reference,
+        ubizaStatus:
+          camPayStatus === 'EXPIRED'
+            ? 'EXPIRED'
+            : camPayStatus === 'CANCELLED' || camPayStatus === 'CANCELED'
+              ? 'CANCELLED'
+              : 'FAILED',
+        camPayStatus,
+      };
+    }
+
+    /*
+     * Aucun produit ne doit être activé pour un statut inconnu.
+     */
+    if (camPayStatus !== 'SUCCESSFUL' && camPayStatus !== 'SUCCESS') {
+      return {
+        received: true,
+        paymentId: payment.id,
+        reference,
+        ubizaStatus: payment.status,
+        camPayStatus,
+        ignored: true,
+      };
+    }
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const currentPayment = await transaction.payment.findUnique({
+        where: {
+          id: payment.id,
+        },
+        select: {
+          id: true,
+          userId: true,
+          currencyId: true,
+          provider: true,
+          purpose: true,
+          status: true,
+          amount: true,
+          providerData: true,
+          providerTransactionId: true,
+          paidAt: true,
+
+          user: {
+            select: {
+              id: true,
+              deletedAt: true,
+              listings: {
+                where: {
+                  deletedAt: null,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                take: 1,
+                select: {
+                  id: true,
+                  status: true,
+                  boostActiveUntil: true,
+                },
+              },
+            },
+          },
+
+          premiumSubscription: {
+            select: {
+              id: true,
+              plan: true,
+              source: true,
+              status: true,
+              amount: true,
+              startsAt: true,
+              endsAt: true,
+            },
+          },
+
+          boost: {
+            select: {
+              id: true,
+              source: true,
+              status: true,
+              durationMinutes: true,
+              amount: true,
+              startsAt: true,
+              endsAt: true,
+            },
+          },
+        },
+      });
+
+      if (!currentPayment) {
+        throw new NotFoundException('Paiement introuvable.');
+      }
+
+      if (!currentPayment.user || currentPayment.user.deletedAt) {
+        throw new NotFoundException('Utilisateur introuvable.');
+      }
+
+      /*
+       * Idempotence :
+       * si le webhook est envoyé plusieurs fois, l’achat n’est activé qu’une fois.
+       */
+      if (currentPayment.status === 'SUCCESS') {
+        return {
+          alreadyConfirmed: true,
+          purpose: currentPayment.purpose,
+          premiumSubscription: currentPayment.premiumSubscription,
+          boost: currentPayment.boost,
+        };
+      }
+
+      const paymentReservation = await transaction.payment.updateMany({
+        where: {
+          id: currentPayment.id,
+          provider: 'CAMPAY',
+          status: {
+            in: ['PENDING', 'PROCESSING'],
+          },
+        },
+        data: {
+          status: 'SUCCESS',
+          paidAt: now,
+          failedAt: null,
+          cancelledAt: null,
+          failureReason: null,
+          providerTransactionId: reference,
+        },
+      });
+
+      if (paymentReservation.count === 0) {
+        throw new BadRequestException(
+          'Ce paiement est déjà traité ou ne peut plus être confirmé.',
+        );
+      }
+
+      if (currentPayment.purpose === 'PREMIUM') {
+        const premiumSubscription = await this.activatePremiumPurchase(
+          transaction,
+          {
+            id: currentPayment.id,
+            userId: currentPayment.userId,
+            currencyId: currentPayment.currencyId,
+            amount: currentPayment.amount,
+            providerData: currentPayment.providerData,
+          },
+          now,
+        );
+
+        await this.referralsService.handleFirstSuccessfulPurchase(transaction, {
+          id: currentPayment.id,
+          userId: currentPayment.userId,
+          currencyId: currentPayment.currencyId,
+          amount: currentPayment.amount,
+        });
+
+        return {
+          alreadyConfirmed: false,
+          purpose: currentPayment.purpose,
+          premiumSubscription,
+          boost: null,
+        };
+      }
+
+      if (currentPayment.purpose === 'BOOST') {
+        const boost = await this.activateBoostPurchase(
+          transaction,
+          {
+            id: currentPayment.id,
+            userId: currentPayment.userId,
+            currencyId: currentPayment.currencyId,
+            amount: currentPayment.amount,
+            providerData: currentPayment.providerData,
+            user: {
+              listings: currentPayment.user.listings,
+            },
+          },
+          now,
+        );
+
+        await this.referralsService.handleFirstSuccessfulPurchase(transaction, {
+          id: currentPayment.id,
+          userId: currentPayment.userId,
+          currencyId: currentPayment.currencyId,
+          amount: currentPayment.amount,
+        });
+
+        return {
+          alreadyConfirmed: false,
+          purpose: currentPayment.purpose,
+          premiumSubscription: null,
+          boost,
+        };
+      }
+
+      throw new BadRequestException('La destination du paiement est invalide.');
+    });
+
+    return {
+      received: true,
+      paymentId: payment.id,
+      reference,
+      camPayStatus,
+      ubizaStatus: 'SUCCESS',
+      alreadyConfirmed: result.alreadyConfirmed,
+      product: result.purpose === 'PREMIUM' ? 'PREMIUM' : 'BOOST',
+    };
+  }
   getPricing() {
     return {
       premium: [
