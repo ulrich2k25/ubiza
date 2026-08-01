@@ -49,6 +49,82 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
   }, []);
 
   useEffect(() => {
+    if (
+      !payment ||
+      payment.status === "SUCCESS" ||
+      payment.status === "FAILED" ||
+      payment.status === "CANCELLED" ||
+      payment.status === "EXPIRED"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const refreshedPayment = await paymentsService.getOne(payment.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        setPayment(refreshedPayment);
+
+        if (refreshedPayment.status === "SUCCESS") {
+          window.clearInterval(intervalId);
+
+          const status = await boostService.getStatus();
+
+          if (!cancelled) {
+            onUpdated(status);
+            setShowPurchase(false);
+            setPhone("");
+            setSuccess(
+              "Paiement confirmé. Votre annonce est maintenant boostée.",
+            );
+            setError("");
+          }
+        }
+
+        if (refreshedPayment.status === "FAILED") {
+          window.clearInterval(intervalId);
+
+          setError(
+            refreshedPayment.failureReason ||
+              "Le paiement Mobile Money a échoué.",
+          );
+
+          setSuccess("");
+        }
+
+        if (refreshedPayment.status === "CANCELLED") {
+          window.clearInterval(intervalId);
+
+          setError("Le paiement a été annulé.");
+
+          setSuccess("");
+        }
+
+        if (refreshedPayment.status === "EXPIRED") {
+          window.clearInterval(intervalId);
+
+          setError("La demande de paiement a expiré.");
+
+          setSuccess("");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [payment?.id]);
+
+  useEffect(() => {
     const shouldOpen = searchParams.get("openBoost") === "1";
 
     if (!shouldOpen) {
@@ -174,41 +250,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Impossible de créer le paiement.",
-      );
-    } finally {
-      setProcessingPayment(false);
-    }
-  }
-
-  async function confirmPaidBoost() {
-    if (!payment) {
-      return;
-    }
-
-    try {
-      setProcessingPayment(true);
-      setError("");
-      setSuccess("");
-
-      await paymentsService.confirm(payment.id);
-
-      const refreshedPayment = await paymentsService.getOne(payment.id);
-
-      setPayment(refreshedPayment as Payment);
-
-      const status = await boostService.getStatus();
-
-      onUpdated(status);
-
-      setShowPurchase(false);
-      setPhone("");
-
-      setSuccess("Paiement confirmé. Votre annonce est maintenant boostée.");
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de confirmer le paiement.",
       );
     } finally {
       setProcessingPayment(false);
@@ -456,26 +497,25 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                 </div>
 
                 <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  Votre Boost sera activé automatiquement dès la confirmation du
-                  paiement.
+                  Confirmez la demande Mobile Money sur votre téléphone. Cette
+                  page vérifiera automatiquement le paiement et activera votre
+                  Boost.
                 </p>
 
-                {process.env.NODE_ENV === "development" && (
-                  <button
-                    type="button"
-                    disabled={processingPayment || payment.status === "SUCCESS"}
-                    onClick={confirmPaidBoost}
-                    className="mt-4 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {processingPayment
-                      ? "Confirmation..."
-                      : payment.status === "SUCCESS"
-                        ? "Paiement confirmé"
-                        : "Confirmer le paiement de test"}
-                  </button>
-                )}
+                {payment.status === "PENDING" ||
+                payment.status === "PROCESSING" ? (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
 
-                {payment.status !== "SUCCESS" && (
+                    <p className="text-sm text-amber-200">
+                      En attente de la confirmation Mobile Money…
+                    </p>
+                  </div>
+                ) : null}
+
+                {(payment.status === "FAILED" ||
+                  payment.status === "CANCELLED" ||
+                  payment.status === "EXPIRED") && (
                   <button
                     type="button"
                     disabled={processingPayment}
@@ -486,7 +526,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                     }}
                     className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Annuler le paiement
+                    Réessayer avec un autre paiement
                   </button>
                 )}
               </div>

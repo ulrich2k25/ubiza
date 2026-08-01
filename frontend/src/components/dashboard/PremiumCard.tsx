@@ -59,52 +59,102 @@ export default function PremiumCard() {
       });
   }, []);
 
+  useEffect(() => {
+    if (
+      !payment ||
+      payment.status === "SUCCESS" ||
+      payment.status === "FAILED" ||
+      payment.status === "CANCELLED" ||
+      payment.status === "EXPIRED"
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        const refreshedPayment = await paymentsService.getOne(payment.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        setPayment(refreshedPayment);
+
+        if (refreshedPayment.status === "SUCCESS") {
+          window.clearInterval(intervalId);
+
+          await loadPremium();
+
+          if (!cancelled) {
+            setSuccess(
+              "Paiement confirmé. Votre abonnement Premium est actif.",
+            );
+            setError("");
+          }
+        }
+
+        if (refreshedPayment.status === "FAILED") {
+          window.clearInterval(intervalId);
+
+          setError(
+            refreshedPayment.failureReason ||
+              "Le paiement Mobile Money a échoué.",
+          );
+          setSuccess("");
+        }
+
+        if (refreshedPayment.status === "CANCELLED") {
+          window.clearInterval(intervalId);
+          setError("Le paiement a été annulé.");
+          setSuccess("");
+        }
+
+        if (refreshedPayment.status === "EXPIRED") {
+          window.clearInterval(intervalId);
+          setError("La demande de paiement a expiré.");
+          setSuccess("");
+        }
+      } catch (err) {
+        console.error("Impossible de vérifier le paiement :", err);
+      }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [payment?.id]);
+
   async function createPayment() {
     try {
       setProcessing(true);
       setError("");
       setSuccess("");
 
-      const response = await paymentsService.createPremium(selectedPlan, phone);
+      const response = await paymentsService.createPremium(
+        selectedPlan,
+        phone.trim(),
+      );
 
       setPayment(response.payment);
 
-      setSuccess("Paiement créé avec succès.");
+      setSuccess(
+        response.message ||
+          "Paiement lancé. Confirmez la demande Mobile Money sur votre téléphone.",
+      );
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      }
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser le paiement.",
+      );
     } finally {
       setProcessing(false);
     }
   }
 
-  async function confirmPayment() {
-    if (!payment) {
-      return;
-    }
-
-    try {
-      setProcessing(true);
-      setError("");
-      setSuccess("");
-
-      await paymentsService.confirm(payment.id);
-
-      await loadPremium();
-
-      const refreshed = await paymentsService.getOne(payment.id);
-
-      setPayment(refreshed as Payment);
-      setSuccess("Paiement confirmé. Premium activé.");
-    } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      }
-    } finally {
-      setProcessing(false);
-    }
-  }
   const expirationDate = premium?.premiumActiveUntil
     ? new Intl.DateTimeFormat("fr-FR", {
         day: "numeric",
@@ -346,26 +396,25 @@ export default function PremiumCard() {
                 </div>
 
                 <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  Votre abonnement sera activé dès que le paiement aura été
-                  confirmé.
+                  Confirmez la demande Mobile Money sur votre téléphone. Cette
+                  page vérifiera automatiquement le paiement et activera votre
+                  abonnement.
                 </p>
 
-                {process.env.NODE_ENV === "development" && (
-                  <button
-                    type="button"
-                    disabled={processing || payment.status === "SUCCESS"}
-                    onClick={confirmPayment}
-                    className="mt-4 w-full rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {processing
-                      ? "Confirmation..."
-                      : payment.status === "SUCCESS"
-                        ? "Paiement confirmé"
-                        : "Confirmer le paiement de test"}
-                  </button>
-                )}
+                {payment.status === "PENDING" ||
+                payment.status === "PROCESSING" ? (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
 
-                {payment.status !== "SUCCESS" && (
+                    <p className="text-sm text-amber-200">
+                      En attente de la confirmation Mobile Money…
+                    </p>
+                  </div>
+                ) : null}
+
+                {(payment.status === "FAILED" ||
+                  payment.status === "CANCELLED" ||
+                  payment.status === "EXPIRED") && (
                   <button
                     type="button"
                     disabled={processing}
@@ -376,7 +425,7 @@ export default function PremiumCard() {
                     }}
                     className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Annuler et choisir un autre forfait
+                    Réessayer avec un autre paiement
                   </button>
                 )}
               </div>
