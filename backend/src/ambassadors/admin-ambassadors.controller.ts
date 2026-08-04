@@ -6,20 +6,29 @@
   ParseEnumPipe,
   Patch,
   Query,
+  Request,
   UseGuards,
 } from '@nestjs/common';
 
 import {
   AmbassadorStatus,
-  UserRole,
   PayoutStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AmbassadorsService } from './ambassadors.service';
+import { CancelCommissionDto } from './dto/cancel-commission.dto';
 import { RejectAmbassadorDto } from './dto/reject-ambassador.dto';
+import { RejectPayoutDto } from './dto/reject-payout.dto';
+
+interface AdminAuthenticatedRequest {
+  user: {
+    id: string;
+  };
+}
 
 @Controller('admin/ambassadors')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -53,19 +62,32 @@ export class AdminAmbassadorsController {
     return this.ambassadorsService.findAllPayoutsForAdmin(status);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ambassadorsService.findOneForAdmin(id);
+  @Get('commissions')
+  findAllCommissions() {
+    return this.ambassadorsService.findAllCommissionsForAdmin();
   }
 
-  @Patch(':id/approve')
-  approve(@Param('id') id: string) {
-    return this.ambassadorsService.approve(id);
+  @Patch('commissions/approve-eligible')
+  approveEligibleCommissions() {
+    return this.ambassadorsService.approveEligibleCommissions();
   }
 
-  @Patch(':id/verify-identity')
-  verifyIdentity(@Param('id') id: string) {
-    return this.ambassadorsService.verifyIdentity(id);
+  @Patch('commissions/:id/approve')
+  approveCommission(@Param('id') id: string) {
+    return this.ambassadorsService.approveCommission(id);
+  }
+
+  @Patch('commissions/:id/cancel')
+  cancelCommission(
+    @Param('id') id: string,
+    @Body() dto: CancelCommissionDto,
+    @Request() request: AdminAuthenticatedRequest,
+  ) {
+    return this.ambassadorsService.cancelCommission(
+      id,
+      dto.reason,
+      request.user.id,
+    );
   }
 
   @Patch('payouts/:id/start')
@@ -79,6 +101,34 @@ export class AdminAmbassadorsController {
     @Body('paymentReference') paymentReference?: string,
   ) {
     return this.ambassadorsService.markPayoutAsPaid(id, paymentReference);
+  }
+
+  @Patch('payouts/:id/reject')
+  rejectPayout(
+    @Param('id') id: string,
+    @Body() dto: RejectPayoutDto,
+    @Request() request: AdminAuthenticatedRequest,
+  ) {
+    return this.ambassadorsService.rejectPayout(
+      id,
+      dto.reason,
+      request.user.id,
+    );
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.ambassadorsService.findOneForAdmin(id);
+  }
+
+  @Patch(':id/approve')
+  approve(@Param('id') id: string) {
+    return this.ambassadorsService.approve(id);
+  }
+
+  @Patch(':id/verify-identity')
+  verifyIdentity(@Param('id') id: string) {
+    return this.ambassadorsService.verifyIdentity(id);
   }
 
   @Patch(':id/reject')

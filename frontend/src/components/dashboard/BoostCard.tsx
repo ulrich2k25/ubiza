@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ManualPaymentForm from "@/components/payments/ManualPaymentForm";
 import { useSearchParams } from "next/navigation";
 import { boostService, type BoostStatus } from "@/services/boost.service";
 import {
@@ -20,7 +21,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
 
-  const [phone, setPhone] = useState("");
   const [showPurchase, setShowPurchase] = useState(false);
   const searchParams = useSearchParams();
 
@@ -51,6 +51,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
   useEffect(() => {
     if (
       !payment ||
+      payment.provider === "MANUAL" ||
       payment.status === "SUCCESS" ||
       payment.status === "FAILED" ||
       payment.status === "CANCELLED" ||
@@ -79,7 +80,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
           if (!cancelled) {
             onUpdated(status);
             setShowPurchase(false);
-            setPhone("");
+
             setSuccess(
               "Paiement confirmé. Votre annonce est maintenant boostée.",
             );
@@ -237,27 +238,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
     }
   }
 
-  async function createPaidBoost() {
-    try {
-      setProcessingPayment(true);
-      setError("");
-      setSuccess("");
-
-      const response = await paymentsService.createBoost("MINUTES_60", phone);
-
-      setPayment(response.payment);
-      setSuccess("Votre demande de paiement a bien été enregistrée.");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Impossible de créer le paiement.",
-      );
-    } finally {
-      setProcessingPayment(false);
-    }
-  }
-
-  const isBusy = activatingCredit || processingPayment;
-
+  const isBusy = activatingCredit;
   return (
     <article
       id="boost"
@@ -390,7 +371,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                   disabled={processingPayment}
                   onClick={() => {
                     setShowPurchase(false);
-                    setPhone("");
+
                     setError("");
                     setSuccess("");
                   }}
@@ -419,43 +400,22 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
               </div>
             )}
 
-            {!payment && (
-              <div className="mt-5">
-                <label
-                  htmlFor="boost-phone"
-                  className="text-sm font-medium text-zinc-300"
-                >
-                  Numéro Mobile Money
-                </label>
-
-                <input
-                  id="boost-phone"
-                  type="tel"
-                  value={phone}
-                  disabled={processingPayment}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="+237 6XX XXX XXX"
-                  autoComplete="tel"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-
-                <button
-                  type="button"
-                  disabled={
-                    processingPayment || phone.trim().length < 8 || !boostOffer
-                  }
-                  onClick={createPaidBoost}
-                  className="mt-4 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {processingPayment
-                    ? "Création du paiement..."
-                    : boostOffer
-                      ? `Continuer — ${formatAmount(boostOffer.amount)} FCFA`
-                      : "Continuer"}
-                </button>
-              </div>
+            {!payment && boostOffer && (
+              <ManualPaymentForm
+                purpose="BOOST"
+                boostDuration="MINUTES_60"
+                amount={boostOffer.amount}
+                disabled={activatingCredit}
+                onSubmitted={(submittedPayment, message) => {
+                  setPayment(submittedPayment);
+                  setSuccess(
+                    message ||
+                      "Votre paiement a été envoyé pour vérification. Votre Boost sera activé au plus tard sous 24 heures.",
+                  );
+                  setError("");
+                }}
+              />
             )}
-
             {payment && (
               <div className="mt-5 rounded-xl border border-white/10 bg-black/30 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -497,21 +457,25 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                 </div>
 
                 <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  Confirmez la demande Mobile Money sur votre téléphone. Cette
-                  page vérifiera automatiquement le paiement et activera votre
-                  Boost.
+                  {payment.provider === "MANUAL"
+                    ? "Vos informations de transaction ont été transmises. Après vérification, votre Boost sera activé au plus tard sous 24 heures."
+                    : "Confirmez la demande Mobile Money sur votre téléphone. Cette page vérifiera automatiquement le paiement et activera votre Boost."}
                 </p>
 
-                {payment.status === "PENDING" ||
-                payment.status === "PROCESSING" ? (
+                {(payment.status === "PENDING" ||
+                  payment.status === "PROCESSING") && (
                   <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
+                    {payment.provider === "CAMPAY" && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
+                    )}
 
                     <p className="text-sm text-amber-200">
-                      En attente de la confirmation Mobile Money…
+                      {payment.provider === "MANUAL"
+                        ? "Paiement en attente de vérification par Ubiza."
+                        : "En attente de la confirmation Mobile Money…"}
                     </p>
                   </div>
-                ) : null}
+                )}
 
                 {(payment.status === "FAILED" ||
                   payment.status === "CANCELLED" ||

@@ -1,7 +1,6 @@
 import { api } from "@/services/api";
 
 export type AmbassadorStatus = "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED";
-
 export interface Ambassador {
   id: string;
   userId: string;
@@ -26,6 +25,7 @@ export interface Ambassador {
 
   pendingBalance?: number;
   availableBalance?: number;
+  processingBalance?: number;
   paidBalance?: number;
   totalEarnings: number;
 
@@ -50,6 +50,7 @@ export interface Payout {
 
   paymentMethod: string | null;
   paymentReference: string | null;
+  failureReason: string | null;
 
   requestedAt: string;
   processedAt: string | null;

@@ -5,6 +5,7 @@
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import {
   AmbassadorStatus,
@@ -17,8 +18,10 @@ import { ApplyAmbassadorDto } from './dto/apply-ambassador.dto';
 
 @Injectable()
 export class AmbassadorsService {
-  constructor(private readonly prisma: PrismaService) {}
-
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
   async apply(userId: string, dto: ApplyAmbassadorDto) {
     if (!dto.acceptTerms) {
       throw new BadRequestException(
@@ -126,7 +129,15 @@ export class AmbassadorsService {
             commissions: true,
           },
         },
+
         commissions: {
+          select: {
+            amount: true,
+            status: true,
+          },
+        },
+
+        payouts: {
           select: {
             amount: true,
             status: true,
@@ -143,18 +154,32 @@ export class AmbassadorsService {
     }
 
     const pendingBalance = ambassador.commissions
-      .filter((c) => c.status === CommissionStatus.PENDING)
-      .reduce((sum, c) => sum + Number(c.amount), 0);
+      .filter((commission) => commission.status === CommissionStatus.PENDING)
+      .reduce((sum, commission) => sum + Number(commission.amount), 0);
 
-    const availableBalance = ambassador.commissions
-      .filter((c) => c.status === CommissionStatus.APPROVED)
-      .reduce((sum, c) => sum + Number(c.amount), 0);
+    const totalApprovedBalance = ambassador.commissions
+      .filter((commission) => commission.status === CommissionStatus.APPROVED)
+      .reduce((sum, commission) => sum + Number(commission.amount), 0);
+
+    const processingBalance = ambassador.payouts
+      .filter(
+        (payout) =>
+          payout.status === PayoutStatus.PENDING ||
+          payout.status === PayoutStatus.PROCESSING,
+      )
+      .reduce((sum, payout) => sum + Number(payout.amount), 0);
+
+    const availableBalance = Math.max(
+      totalApprovedBalance - processingBalance,
+      0,
+    );
 
     const paidBalance = ambassador.commissions
-      .filter((c) => c.status === CommissionStatus.PAID)
-      .reduce((sum, c) => sum + Number(c.amount), 0);
+      .filter((commission) => commission.status === CommissionStatus.PAID)
+      .reduce((sum, commission) => sum + Number(commission.amount), 0);
 
-    const totalEarnings = pendingBalance + availableBalance + paidBalance;
+    const totalEarnings =
+      pendingBalance + availableBalance + processingBalance + paidBalance;
 
     return {
       hasApplied: true,
@@ -162,6 +187,7 @@ export class AmbassadorsService {
         ...ambassador,
         pendingBalance,
         availableBalance,
+        processingBalance,
         paidBalance,
         totalEarnings,
       },
@@ -175,6 +201,7 @@ export class AmbassadorsService {
             status,
           }
         : undefined,
+
       include: {
         user: {
           select: {
@@ -194,6 +221,21 @@ export class AmbassadorsService {
         commissions: {
           select: {
             amount: true,
+            status: true,
+          },
+        },
+
+        payouts: {
+          where: {
+            status: {
+              in: [PayoutStatus.PENDING, PayoutStatus.PROCESSING],
+            },
+          },
+          orderBy: {
+            requestedAt: 'desc',
+          },
+          take: 1,
+          select: {
             status: true,
           },
         },
@@ -234,6 +276,8 @@ export class AmbassadorsService {
         availableBalance,
         paidBalance,
         totalEarnings,
+
+        activePayoutStatus: ambassador.payouts[0]?.status ?? null,
       };
     });
   }
@@ -693,13 +737,335 @@ export class AmbassadorsService {
     });
   }
 
+  async approveEligibleCommissions() {
+    const rawDelayDays = this.configService.get<string>(
+      'AMBASSADOR_COMMISSION_APPROVAL_DELAY_DAYS',
+    );
+
+    const approvalDelayDays = Number(rawDelayDays ?? '7');
+
+    if (!Number.isInteger(approvalDelayDays) || approvalDelayDays < 0) {
+      throw new BadRequestException(
+        'Le délai d’approbation des commissions est invalide.',
+      );
+    }
+
+    const eligibleBefore = new Date(
+      Date.now() - approvalDelayDays * 24 * 60 * 60 * 1000,
+    );
+
+    const eligibleCommissions = await this.prisma.commission.findMany({
+      where: {
+        status: CommissionStatus.PENDING,
+        createdAt: {
+          lte: eligibleBefore,
+        },
+        payment: {
+          status: 'SUCCESS',
+        },
+        ambassador: {
+          status: AmbassadorStatus.ACTIVE,
+        },
+      },
+      select: {
+        id: true,
+        amount: true,
+      },
+    });
+
+    if (eligibleCommissions.length === 0) {
+      return {
+        message: 'Aucune commission éligible à approuver.',
+        approvedCount: 0,
+        approvedAmount: 0,
+        approvalDelayDays,
+      };
+    }
+
+    const result = await this.prisma.commission.updateMany({
+      where: {
+        id: {
+          in: eligibleCommissions.map((commission) => commission.id),
+        },
+        status: CommissionStatus.PENDING,
+      },
+      data: {
+        status: CommissionStatus.APPROVED,
+        approvedAt: new Date(),
+      },
+    });
+
+    const approvedAmount = eligibleCommissions.reduce(
+      (sum, commission) => sum + Number(commission.amount),
+      0,
+    );
+
+    return {
+      message: `${result.count} commission(s) approuvée(s).`,
+      approvedCount: result.count,
+      approvedAmount,
+      approvalDelayDays,
+    };
+  }
+  async approveCommission(commissionId: string) {
+    const rawDelayDays = this.configService.get<string>(
+      'AMBASSADOR_COMMISSION_APPROVAL_DELAY_DAYS',
+    );
+
+    const approvalDelayDays = Number(rawDelayDays ?? '7');
+
+    if (!Number.isInteger(approvalDelayDays) || approvalDelayDays < 0) {
+      throw new BadRequestException(
+        'Le délai d’approbation des commissions est invalide.',
+      );
+    }
+
+    const commission = await this.prisma.commission.findUnique({
+      where: {
+        id: commissionId,
+      },
+      include: {
+        payment: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        ambassador: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!commission) {
+      throw new NotFoundException('Commission introuvable.');
+    }
+
+    if (commission.status !== CommissionStatus.PENDING) {
+      throw new BadRequestException(
+        'Seule une commission en attente peut être approuvée.',
+      );
+    }
+
+    if (!commission.payment) {
+      throw new BadRequestException(
+        "Aucun paiement n'est associé à cette commission.",
+      );
+    }
+
+    if (commission.payment.status !== 'SUCCESS') {
+      throw new BadRequestException(
+        "Le paiement associé à cette commission n'est pas confirmé.",
+      );
+    }
+
+    if (commission.ambassador.status !== AmbassadorStatus.ACTIVE) {
+      throw new BadRequestException(
+        "Le compte ambassadeur associé n'est pas actif.",
+      );
+    }
+
+    const eligibleAt = new Date(
+      commission.createdAt.getTime() + approvalDelayDays * 24 * 60 * 60 * 1000,
+    );
+
+    if (eligibleAt.getTime() > Date.now()) {
+      throw new BadRequestException(
+        `Cette commission ne pourra être approuvée qu'à partir du ${eligibleAt.toLocaleDateString(
+          'fr-FR',
+        )}.`,
+      );
+    }
+
+    const result = await this.prisma.commission.updateMany({
+      where: {
+        id: commissionId,
+        status: CommissionStatus.PENDING,
+      },
+      data: {
+        status: CommissionStatus.APPROVED,
+        approvedAt: new Date(),
+      },
+    });
+
+    if (result.count === 0) {
+      throw new BadRequestException('Cette commission a déjà été modifiée.');
+    }
+
+    return this.prisma.commission.findUnique({
+      where: {
+        id: commissionId,
+      },
+      include: {
+        ambassador: {
+          select: {
+            id: true,
+            fullName: true,
+            referralCode: true,
+          },
+        },
+        referral: {
+          include: {
+            referredUser: {
+              select: {
+                id: true,
+                email: true,
+                profile: {
+                  select: {
+                    username: true,
+                    displayName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            purpose: true,
+            status: true,
+            paidAt: true,
+          },
+        },
+        currency: {
+          select: {
+            id: true,
+            code: true,
+            symbol: true,
+          },
+        },
+      },
+    });
+  }
+
+  async cancelCommission(
+    commissionId: string,
+    reason: string,
+    adminUserId: string,
+  ) {
+    const normalizedReason = reason.trim();
+
+    if (normalizedReason.length < 3) {
+      throw new BadRequestException(
+        "La raison de l'annulation est obligatoire.",
+      );
+    }
+
+    const commission = await this.prisma.commission.findUnique({
+      where: {
+        id: commissionId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!commission) {
+      throw new NotFoundException('Commission introuvable.');
+    }
+
+    if (commission.status === CommissionStatus.PAID) {
+      throw new BadRequestException(
+        'Une commission déjà payée ne peut pas être annulée directement.',
+      );
+    }
+
+    if (commission.status === CommissionStatus.CANCELLED) {
+      throw new BadRequestException('Cette commission est déjà annulée.');
+    }
+
+    if (
+      commission.status !== CommissionStatus.PENDING &&
+      commission.status !== CommissionStatus.APPROVED
+    ) {
+      throw new BadRequestException(
+        'Cette commission ne peut pas être annulée.',
+      );
+    }
+
+    const result = await this.prisma.commission.updateMany({
+      where: {
+        id: commissionId,
+        status: {
+          in: [CommissionStatus.PENDING, CommissionStatus.APPROVED],
+        },
+      },
+      data: {
+        status: CommissionStatus.CANCELLED,
+        cancelledAt: new Date(),
+        cancellationReason: normalizedReason,
+        cancelledByAdminId: adminUserId,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new BadRequestException('Cette commission a déjà été modifiée.');
+    }
+
+    return this.prisma.commission.findUnique({
+      where: {
+        id: commissionId,
+      },
+      include: {
+        ambassador: {
+          select: {
+            id: true,
+            fullName: true,
+            referralCode: true,
+          },
+        },
+        referral: {
+          include: {
+            referredUser: {
+              select: {
+                id: true,
+                email: true,
+                profile: {
+                  select: {
+                    username: true,
+                    displayName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            purpose: true,
+            status: true,
+            paidAt: true,
+          },
+        },
+        currency: {
+          select: {
+            id: true,
+            code: true,
+            symbol: true,
+          },
+        },
+      },
+    });
+  }
+
   async requestPayout(userId: string) {
     const ambassador = await this.prisma.ambassador.findUnique({
       where: {
         userId,
       },
-      include: {
-        commissions: true,
+      select: {
+        id: true,
+        status: true,
+        identityVerifiedAt: true,
+        minimumPayout: true,
       },
     });
 
@@ -718,6 +1084,7 @@ export class AmbassadorsService {
         'Votre identité doit être vérifiée avant un paiement.',
       );
     }
+
     const existingPayout = await this.prisma.payout.findFirst({
       where: {
         ambassadorId: ambassador.id,
@@ -733,9 +1100,29 @@ export class AmbassadorsService {
       );
     }
 
-    const commissions = ambassador.commissions.filter(
-      (commission) => commission.status === CommissionStatus.APPROVED,
-    );
+    const commissions = await this.prisma.commission.findMany({
+      where: {
+        ambassadorId: ambassador.id,
+        status: CommissionStatus.APPROVED,
+        payoutItems: {
+          none: {
+            payout: {
+              status: {
+                in: [
+                  PayoutStatus.PENDING,
+                  PayoutStatus.PROCESSING,
+                  PayoutStatus.PAID,
+                ],
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        amount: true,
+      },
+    });
 
     const total = commissions.reduce(
       (sum, commission) => sum + Number(commission.amount),
@@ -747,6 +1134,7 @@ export class AmbassadorsService {
         "Le montant minimum de paiement n'est pas atteint.",
       );
     }
+
     return this.prisma.$transaction(async (tx) => {
       const currency = await tx.currency.findFirst();
 
@@ -763,28 +1151,17 @@ export class AmbassadorsService {
         },
       });
 
-      for (const commission of commissions) {
-        await tx.payoutItem.create({
-          data: {
-            payoutId: payout.id,
-            commissionId: commission.id,
-          },
-        });
-
-        await tx.commission.update({
-          where: {
-            id: commission.id,
-          },
-          data: {
-            status: CommissionStatus.PAID,
-            paidAt: new Date(),
-          },
-        });
-      }
+      await tx.payoutItem.createMany({
+        data: commissions.map((commission) => ({
+          payoutId: payout.id,
+          commissionId: commission.id,
+        })),
+      });
 
       return payout;
     });
   }
+
   private async getAmbassadorOrThrow(id: string) {
     const ambassador = await this.prisma.ambassador.findUnique({
       where: {
@@ -802,6 +1179,60 @@ export class AmbassadorsService {
     }
 
     return ambassador;
+  }
+
+  async findAllCommissionsForAdmin() {
+    return this.prisma.commission.findMany({
+      include: {
+        ambassador: {
+          select: {
+            id: true,
+            fullName: true,
+            referralCode: true,
+          },
+        },
+
+        referral: {
+          include: {
+            referredUser: {
+              select: {
+                id: true,
+                email: true,
+
+                profile: {
+                  select: {
+                    username: true,
+                    displayName: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+
+        payment: {
+          select: {
+            id: true,
+            amount: true,
+            purpose: true,
+            status: true,
+            paidAt: true,
+          },
+        },
+
+        currency: {
+          select: {
+            id: true,
+            code: true,
+            symbol: true,
+          },
+        },
+      },
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
   }
 
   async findAllPayoutsForAdmin(status?: PayoutStatus) {
@@ -883,6 +1314,11 @@ export class AmbassadorsService {
             identityVerifiedAt: true,
           },
         },
+        items: {
+          select: {
+            commissionId: true,
+          },
+        },
       },
     });
 
@@ -896,25 +1332,166 @@ export class AmbassadorsService {
       );
     }
 
-    if (!payout) {
-      throw new NotFoundException('Paiement introuvable.');
-    }
-
     if (payout.status !== PayoutStatus.PROCESSING) {
       throw new BadRequestException(
         'Seul un paiement en cours peut être validé.',
       );
     }
 
-    return this.prisma.payout.update({
+    if (payout.items.length === 0) {
+      throw new BadRequestException(
+        "Aucune commission n'est associée à ce paiement.",
+      );
+    }
+
+    const commissionIds = payout.items.map((item) => item.commissionId);
+
+    const paidAt = new Date();
+    const normalizedReference = paymentReference?.trim() || undefined;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedPayout = await tx.payout.updateMany({
+        where: {
+          id,
+          status: PayoutStatus.PROCESSING,
+        },
+        data: {
+          status: PayoutStatus.PAID,
+          paidAt,
+          paymentReference: normalizedReference,
+        },
+      });
+
+      if (updatedPayout.count === 0) {
+        throw new BadRequestException('Ce paiement a déjà été modifié.');
+      }
+
+      const updatedCommissions = await tx.commission.updateMany({
+        where: {
+          id: {
+            in: commissionIds,
+          },
+          status: CommissionStatus.APPROVED,
+        },
+        data: {
+          status: CommissionStatus.PAID,
+          paidAt,
+        },
+      });
+
+      if (updatedCommissions.count !== commissionIds.length) {
+        throw new BadRequestException(
+          'Certaines commissions associées ne sont plus disponibles.',
+        );
+      }
+
+      return tx.payout.findUniqueOrThrow({
+        where: {
+          id,
+        },
+      });
+    });
+  }
+
+  async rejectPayout(id: string, reason: string, adminUserId: string) {
+    const normalizedReason = reason.trim();
+
+    if (normalizedReason.length < 3) {
+      throw new BadRequestException('La raison du refus est obligatoire.');
+    }
+
+    const payout = await this.prisma.payout.findUnique({
       where: {
         id,
       },
-      data: {
-        status: PayoutStatus.PAID,
-        paidAt: new Date(),
-        paymentReference,
+      select: {
+        id: true,
+        status: true,
+
+        items: {
+          select: {
+            commissionId: true,
+          },
+        },
       },
+    });
+
+    if (!payout) {
+      throw new NotFoundException('Paiement introuvable.');
+    }
+
+    if (
+      payout.status !== PayoutStatus.PENDING &&
+      payout.status !== PayoutStatus.PROCESSING
+    ) {
+      throw new BadRequestException(
+        'Seul un retrait en attente ou en traitement peut être refusé.',
+      );
+    }
+
+    if (payout.items.length === 0) {
+      throw new BadRequestException(
+        "Aucune commission n'est associée à ce retrait.",
+      );
+    }
+
+    const commissionIds = payout.items.map((item) => item.commissionId);
+
+    const cancelledAt = new Date();
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedPayout = await tx.payout.updateMany({
+        where: {
+          id,
+          status: {
+            in: [PayoutStatus.PENDING, PayoutStatus.PROCESSING],
+          },
+        },
+
+        data: {
+          status: PayoutStatus.CANCELLED,
+          processedAt: cancelledAt,
+          paidAt: null,
+          failureReason: normalizedReason,
+        },
+      });
+
+      if (updatedPayout.count === 0) {
+        throw new BadRequestException('Ce retrait a déjà été modifié.');
+      }
+
+      const updatedCommissions = await tx.commission.updateMany({
+        where: {
+          id: {
+            in: commissionIds,
+          },
+
+          status: CommissionStatus.APPROVED,
+        },
+
+        data: {
+          status: CommissionStatus.CANCELLED,
+          cancelledAt,
+          cancellationReason: normalizedReason,
+          cancelledByAdminId: adminUserId,
+        },
+      });
+
+      if (updatedCommissions.count !== commissionIds.length) {
+        throw new BadRequestException(
+          'Certaines commissions associées ne peuvent plus être annulées.',
+        );
+      }
+
+      return tx.payout.findUniqueOrThrow({
+        where: {
+          id,
+        },
+
+        include: {
+          items: true,
+        },
+      });
     });
   }
 

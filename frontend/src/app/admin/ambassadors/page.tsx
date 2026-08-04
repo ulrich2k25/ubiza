@@ -446,7 +446,29 @@ function AmbassadorTableRow({
       </td>
 
       <td className="px-5 py-4">
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {ambassador.activePayoutStatus ? (
+            <span
+              title={
+                ambassador.activePayoutStatus === "PENDING"
+                  ? "Nouvelle demande de retrait"
+                  : "Retrait en cours de traitement"
+              }
+              aria-label={
+                ambassador.activePayoutStatus === "PENDING"
+                  ? "Nouvelle demande de retrait"
+                  : "Retrait en cours de traitement"
+              }
+              className={`flex h-9 w-9 items-center justify-center rounded-lg border text-base ${
+                ambassador.activePayoutStatus === "PENDING"
+                  ? "border-amber-500/40 bg-amber-500/10"
+                  : "border-sky-500/40 bg-sky-500/10"
+              }`}
+            >
+              🔔
+            </span>
+          ) : null}
+
           <Link
             href={`/admin/ambassadors/${ambassador.id}`}
             className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10"

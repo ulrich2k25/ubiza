@@ -27,6 +27,32 @@ export default function AdminPage() {
           </p>
         </Link>
 
+        <Link
+          href="/admin/payments"
+          className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500 hover:bg-white/10"
+        >
+          <div className="text-5xl">💳</div>
+
+          <h2 className="mt-5 text-xl font-bold">Paiements manuels</h2>
+
+          <p className="mt-2 text-sm text-zinc-400">
+            Vérifier, valider ou refuser les paiements Mobile Money.
+          </p>
+        </Link>
+
+        <Link
+          href="/admin/commissions"
+          className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:border-emerald-500 hover:bg-white/10"
+        >
+          <div className="text-5xl">💰</div>
+
+          <h2 className="mt-5 text-xl font-bold">Commissions ambassadeurs</h2>
+
+          <p className="mt-2 text-sm text-zinc-400">
+            Vérifier et approuver les commissions éligibles.
+          </p>
+        </Link>
+
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6 opacity-60">
           <div className="text-5xl">👥</div>
 
@@ -57,15 +83,18 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 opacity-60">
-          <div className="text-5xl">📊</div>
+        <Link
+          href="/admin/ambassadors/payouts"
+          className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:border-sky-500 hover:bg-white/10"
+        >
+          <div className="text-5xl">📤</div>
 
-          <h2 className="mt-5 text-xl font-bold">Statistiques</h2>
+          <h2 className="mt-5 text-xl font-bold">Retraits ambassadeurs</h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            Disponible prochainement.
+            Suivre et traiter toutes les demandes de retrait des ambassadeurs.
           </p>
-        </div>
+        </Link>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6 opacity-60">
           <div className="text-5xl">⚙️</div>

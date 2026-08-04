@@ -879,21 +879,21 @@ model Ambassador {
   id     String @id @default(cuid())
   userId String @unique
 
-  referralCode String           @unique
-  status       AmbassadorStatus @default(PENDING)
+  referralCode      String           @unique
+  status            AmbassadorStatus @default(PENDING)
   fullName          String?
-mobileMoneyNumber String?
-identityNumber    String?
-country           String?
-termsAcceptedAt   DateTime?
+  mobileMoneyNumber String?
+  identityNumber    String?
+  country           String?
+  termsAcceptedAt   DateTime?
 
-rejectionReason String?
-rejectedAt      DateTime?
+  rejectionReason String?
+  rejectedAt      DateTime?
 
   approvedAt  DateTime?
   suspendedAt DateTime?
 
-  identityVerifiedAt DateTime?
+  identityVerifiedAt              DateTime?
   identityVerificationRequestedAt DateTime?
 
   minimumPayout Decimal @default(5000) @db.Decimal(12, 2)
@@ -937,10 +937,13 @@ model Referral {
 model Commission {
   id String @id @default(cuid())
 
-  ambassadorId String
-  referralId   String?
-  currencyId   String
-  paymentId    String? @unique
+  ambassadorId       String
+  referralId         String?
+  currencyId         String
+  paymentId          String?   @unique
+  cancelledAt        DateTime?
+  cancellationReason String?
+  cancelledByAdminId String?
 
   amount Decimal          @db.Decimal(12, 2)
   status CommissionStatus @default(PENDING)
@@ -998,7 +1001,7 @@ model PayoutItem {
   id String @id @default(cuid())
 
   payoutId     String
-  commissionId String @unique
+  commissionId String
 
   payout     Payout     @relation(fields: [payoutId], references: [id], onDelete: Cascade)
   commission Commission @relation(fields: [commissionId], references: [id])
@@ -1007,6 +1010,7 @@ model PayoutItem {
 
   @@unique([payoutId, commissionId])
   @@index([payoutId])
+  @@index([commissionId])
 }
 
 // ======================================================

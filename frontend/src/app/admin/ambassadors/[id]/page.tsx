@@ -108,6 +108,21 @@ export default function AdminAmbassadorDetailsPage({
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectReasonError, setRejectReasonError] = useState("");
+
+  const [payoutToConfirm, setPayoutToConfirm] =
+    useState<AmbassadorPayout | null>(null);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentReferenceError, setPaymentReferenceError] = useState("");
+  const [payoutToReject, setPayoutToReject] = useState<AmbassadorPayout | null>(
+    null,
+  );
+
+  const [rejectPayoutReason, setRejectPayoutReason] = useState("");
+  const [rejectPayoutError, setRejectPayoutError] = useState("");
+
   const loadAmbassador = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setError("");
@@ -253,28 +268,51 @@ export default function AdminAmbassadorDetailsPage({
     );
   }
 
-  async function handleReject(): Promise<void> {
+  function handleReject(): void {
     if (!ambassador) {
       return;
     }
 
-    const reason = window.prompt("Indique la raison du refus :");
+    setRejectReason("");
+    setRejectReasonError("");
+    setIsRejectModalOpen(true);
+  }
 
-    if (reason === null) {
+  async function confirmReject(): Promise<void> {
+    if (!ambassador) {
       return;
     }
 
-    const cleanReason = reason.trim();
+    const cleanReason = rejectReason.trim();
 
-    if (!cleanReason) {
-      setError("La raison du refus est obligatoire.");
+    if (cleanReason.length < 3) {
+      setRejectReasonError(
+        "La raison du refus doit contenir au moins 3 caractères.",
+      );
       return;
     }
 
-    await runAmbassadorAction(
-      () => adminAmbassadorService.reject(ambassador.id, cleanReason),
-      "La candidature a été refusée.",
-    );
+    setActionId(ambassador.id);
+    setError("");
+    setSuccessMessage("");
+    setRejectReasonError("");
+
+    try {
+      await adminAmbassadorService.reject(ambassador.id, cleanReason);
+
+      setSuccessMessage("La candidature a été refusée.");
+      setIsRejectModalOpen(false);
+      setRejectReason("");
+      await loadAmbassador();
+    } catch (actionError) {
+      setRejectReasonError(
+        actionError instanceof Error
+          ? actionError.message
+          : "Impossible de refuser cette candidature.",
+      );
+    } finally {
+      setActionId(null);
+    }
   }
 
   async function handleStartPayout(payout: AmbassadorPayout): Promise<void> {
@@ -312,9 +350,7 @@ export default function AdminAmbassadorDetailsPage({
     }
   }
 
-  async function handleMarkPayoutAsPaid(
-    payout: AmbassadorPayout,
-  ): Promise<void> {
+  function handleMarkPayoutAsPaid(payout: AmbassadorPayout): void {
     if (!ambassador?.identityVerifiedAt) {
       setError(
         "L’identité de l’ambassadeur doit être vérifiée avant de confirmer le paiement.",
@@ -322,45 +358,93 @@ export default function AdminAmbassadorDetailsPage({
       return;
     }
 
-    const reference = window.prompt(
-      "Saisis la référence de la transaction Mobile Money :",
-    );
+    setPayoutToConfirm(payout);
+    setPaymentReference("");
+    setPaymentReferenceError("");
+    setError("");
+    setSuccessMessage("");
+  }
 
-    if (reference === null) {
+  async function confirmMarkPayoutAsPaid(): Promise<void> {
+    if (!payoutToConfirm) {
       return;
     }
 
-    const cleanReference = reference.trim();
+    const cleanReference = paymentReference.trim();
 
-    if (!cleanReference) {
-      setError("La référence du paiement est obligatoire.");
+    if (cleanReference.length < 3) {
+      setPaymentReferenceError(
+        "La référence doit contenir au moins 3 caractères.",
+      );
       return;
     }
 
-    const confirmed = window.confirm(
-      `Confirmer que le paiement de ${formatMoney(
-        payout.amount,
-      )} a réellement été effectué ?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setActionId(payout.id);
+    setActionId(payoutToConfirm.id);
+    setPaymentReferenceError("");
     setError("");
     setSuccessMessage("");
 
     try {
-      await adminAmbassadorService.markPayoutAsPaid(payout.id, cleanReference);
+      await adminAmbassadorService.markPayoutAsPaid(
+        payoutToConfirm.id,
+        cleanReference,
+      );
 
       setSuccessMessage("Le paiement a été marqué comme payé.");
+      setPayoutToConfirm(null);
+      setPaymentReference("");
       await loadAmbassador();
     } catch (actionError) {
-      setError(
+      setPaymentReferenceError(
         actionError instanceof Error
           ? actionError.message
           : "Impossible de confirmer le paiement.",
+      );
+    } finally {
+      setActionId(null);
+    }
+  }
+
+  function handleRejectPayout(payout: AmbassadorPayout): void {
+    setPayoutToReject(payout);
+    setRejectPayoutReason("");
+    setRejectPayoutError("");
+    setError("");
+    setSuccessMessage("");
+  }
+
+  async function confirmRejectPayout(): Promise<void> {
+    if (!payoutToReject) {
+      return;
+    }
+
+    const reason = rejectPayoutReason.trim();
+
+    if (reason.length < 3) {
+      setRejectPayoutError(
+        "La raison du refus doit contenir au moins 3 caractères.",
+      );
+      return;
+    }
+
+    setActionId(payoutToReject.id);
+    setRejectPayoutError("");
+
+    try {
+      await adminAmbassadorService.rejectPayout(payoutToReject.id, reason);
+
+      setPayoutToReject(null);
+      setRejectPayoutReason("");
+      setSuccessMessage(
+        "Le retrait a été refusé et les commissions ont été annulées.",
+      );
+
+      await loadAmbassador();
+    } catch (actionError) {
+      setRejectPayoutError(
+        actionError instanceof Error
+          ? actionError.message
+          : "Impossible de refuser ce retrait.",
       );
     } finally {
       setActionId(null);
@@ -729,7 +813,11 @@ export default function AdminAmbassadorDetailsPage({
                         <GenericStatusBadge status={commission.status} />
                       </TableCell>
 
-                      <TableCell>{formatDate(commission.paidAt)}</TableCell>
+                      <TableCell>
+                        {commission.status === "PAID"
+                          ? formatDate(commission.paidAt)
+                          : "Non renseigné"}
+                      </TableCell>
                     </tr>
                   ))}
                 </tbody>
@@ -823,9 +911,29 @@ export default function AdminAmbassadorDetailsPage({
                               />
                             ) : null}
 
+                            {payout.status === "PENDING" ||
+                            payout.status === "PROCESSING" ? (
+                              <button
+                                type="button"
+                                disabled={isProcessing}
+                                onClick={() => handleRejectPayout(payout)}
+                                className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {isProcessing
+                                  ? "Traitement..."
+                                  : "Refuser pour fraude"}
+                              </button>
+                            ) : null}
+
                             {payout.status === "PAID" ? (
                               <span className="text-sm font-semibold text-emerald-300">
                                 Terminé
+                              </span>
+                            ) : null}
+
+                            {payout.status === "CANCELLED" ? (
+                              <span className="text-sm font-semibold text-red-300">
+                                Refusé
                               </span>
                             ) : null}
                           </div>
@@ -841,6 +949,251 @@ export default function AdminAmbassadorDetailsPage({
           )}
         </div>
       </section>
+
+      {isRejectModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reject-ambassador-title"
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmReject();
+            }}
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl"
+          >
+            <h2
+              id="reject-ambassador-title"
+              className="text-xl font-black text-white"
+            >
+              Refuser la candidature
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Indique la raison du refus. Elle sera conservée dans le dossier de
+              l’ambassadeur.
+            </p>
+
+            <label
+              htmlFor="reject-reason"
+              className="mt-6 block text-sm font-semibold text-white"
+            >
+              Raison du refus
+            </label>
+
+            <textarea
+              id="reject-reason"
+              value={rejectReason}
+              onChange={(event) => {
+                setRejectReason(event.target.value);
+                setRejectReasonError("");
+              }}
+              rows={4}
+              maxLength={500}
+              autoFocus
+              disabled={actionId === ambassador.id}
+              placeholder="Exemple : informations incomplètes ou non conformes."
+              className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-red-500 disabled:opacity-50"
+            />
+
+            {rejectReasonError ? (
+              <p className="mt-3 text-sm text-red-300">{rejectReasonError}</p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRejectModalOpen(false);
+                  setRejectReason("");
+                  setRejectReasonError("");
+                }}
+                disabled={actionId === ambassador.id}
+                className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  actionId === ambassador.id || rejectReason.trim().length < 3
+                }
+                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionId === ambassador.id
+                  ? "Refus en cours..."
+                  : "Confirmer le refus"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {payoutToConfirm ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-payout-title"
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmMarkPayoutAsPaid();
+            }}
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl"
+          >
+            <h2
+              id="confirm-payout-title"
+              className="text-xl font-black text-white"
+            >
+              Confirmer le paiement
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-white/60">
+              Confirme uniquement après avoir réellement transféré{" "}
+              <strong className="text-white">
+                {formatMoney(payoutToConfirm.amount)}
+              </strong>{" "}
+              par Mobile Money.
+            </p>
+
+            <label
+              htmlFor="payment-reference"
+              className="mt-6 block text-sm font-semibold text-white"
+            >
+              Référence de transaction
+            </label>
+
+            <input
+              id="payment-reference"
+              type="text"
+              value={paymentReference}
+              onChange={(event) => {
+                setPaymentReference(event.target.value);
+                setPaymentReferenceError("");
+              }}
+              maxLength={150}
+              autoFocus
+              disabled={actionId === payoutToConfirm.id}
+              placeholder="Exemple : MP260803123456"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-emerald-500 disabled:opacity-50"
+            />
+
+            {paymentReferenceError ? (
+              <p className="mt-3 text-sm text-red-300">
+                {paymentReferenceError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setPayoutToConfirm(null);
+                  setPaymentReference("");
+                  setPaymentReferenceError("");
+                }}
+                disabled={actionId === payoutToConfirm.id}
+                className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Annuler
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  actionId === payoutToConfirm.id ||
+                  paymentReference.trim().length < 3
+                }
+                className="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionId === payoutToConfirm.id
+                  ? "Confirmation..."
+                  : "Marquer comme payé"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {payoutToReject ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmRejectPayout();
+            }}
+            className="w-full max-w-lg rounded-3xl border border-red-500/20 bg-zinc-950 p-6 shadow-2xl"
+          >
+            <h2 className="text-xl font-black text-white">
+              Refuser le retrait pour fraude
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-white/60">
+              Le retrait de {formatMoney(payoutToReject.amount)} sera annulé.
+              Les commissions associées seront également annulées
+              définitivement.
+            </p>
+
+            <label
+              htmlFor="reject-payout-reason"
+              className="mt-6 block text-sm font-semibold text-white"
+            >
+              Motif du refus
+            </label>
+
+            <textarea
+              id="reject-payout-reason"
+              value={rejectPayoutReason}
+              onChange={(event) => {
+                setRejectPayoutReason(event.target.value);
+                setRejectPayoutError("");
+              }}
+              placeholder="Exemple : faux comptes ou auto-parrainage détecté"
+              rows={4}
+              autoFocus
+              disabled={actionId === payoutToReject.id}
+              className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-red-500"
+            />
+
+            {rejectPayoutError ? (
+              <p className="mt-3 text-sm text-red-300">{rejectPayoutError}</p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={actionId === payoutToReject.id}
+                onClick={() => {
+                  setPayoutToReject(null);
+                  setRejectPayoutReason("");
+                  setRejectPayoutError("");
+                }}
+                className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10 disabled:opacity-50"
+              >
+                Retour
+              </button>
+
+              <button
+                type="submit"
+                disabled={
+                  actionId === payoutToReject.id ||
+                  rejectPayoutReason.trim().length < 3
+                }
+                className="rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {actionId === payoutToReject.id
+                  ? "Refus en cours..."
+                  : "Confirmer le refus"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </main>
   );
 }

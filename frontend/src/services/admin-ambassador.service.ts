@@ -12,17 +12,24 @@ export type AdminPayoutStatus =
   | "FAILED"
   | "CANCELLED";
 
+export type AdminCommissionStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "PAID"
+  | "CANCELLED";
+
 export interface AdminAmbassador extends Ambassador {
   pendingBalance: number;
   availableBalance: number;
   paidBalance: number;
   totalEarnings: number;
-
+  activePayoutStatus: "PENDING" | "PROCESSING" | null;
   user: {
     id: string;
     email: string;
     status: string;
     createdAt: string;
+
     profile: {
       username: string | null;
       displayName: string | null;
@@ -64,6 +71,7 @@ export interface AdminAmbassadorPayout {
     user: {
       id: string;
       email: string;
+
       profile: {
         username: string | null;
         displayName: string | null;
@@ -86,11 +94,70 @@ export interface AdminAmbassadorPayout {
     commission: {
       id: string;
       amount: number | string;
-      status: string;
+      status: AdminCommissionStatus;
       createdAt: string;
       paidAt: string | null;
     };
   }>;
+}
+
+export interface AdminCommission {
+  id: string;
+  ambassadorId?: string;
+  referralId?: string;
+  paymentId?: string;
+  currencyId?: string;
+
+  amount: number | string;
+  status: AdminCommissionStatus;
+
+  createdAt: string;
+  updatedAt?: string;
+
+  approvedAt: string | null;
+  paidAt: string | null;
+
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  cancelledByAdminId: string | null;
+
+  ambassador: {
+    id: string;
+    fullName: string;
+    referralCode: string | null;
+  };
+
+  referral: {
+    id: string;
+
+    referredUser: {
+      id: string;
+      email: string;
+
+      profile: {
+        username: string | null;
+        displayName: string | null;
+      } | null;
+    };
+  };
+
+  payment: {
+    id: string;
+    amount: number | string;
+    purpose: string;
+    status: string;
+    paidAt: string | null;
+  };
+
+  currency: {
+    id: string;
+    code: string;
+    symbol: string | null;
+  };
+}
+
+interface AdminCommissionsApiResponse {
+  value?: AdminCommission[];
 }
 
 interface AdminAmbassadorsApiResponse {
@@ -101,6 +168,13 @@ interface AdminAmbassadorsApiResponse {
 interface AdminPayoutsApiResponse {
   value?: AdminAmbassadorPayout[];
   Count?: number;
+}
+
+export interface ApproveEligibleCommissionsResponse {
+  message: string;
+  approvedCount: number;
+  approvedAmount: number;
+  approvalDelayDays: number;
 }
 
 export const adminAmbassadorService = {
@@ -185,6 +259,54 @@ export const adminAmbassadorService = {
       method: "PATCH",
       body: JSON.stringify({
         paymentReference: paymentReference?.trim() || undefined,
+      }),
+    });
+  },
+
+  rejectPayout(
+    payoutId: string,
+    reason: string,
+  ): Promise<AdminAmbassadorPayout> {
+    return api(`/admin/ambassadors/payouts/${payoutId}/reject`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        reason: reason.trim(),
+      }),
+    });
+  },
+
+  async getAllCommissions(): Promise<AdminCommission[]> {
+    const response = (await api("/admin/ambassadors/commissions")) as
+      | AdminCommission[]
+      | AdminCommissionsApiResponse;
+
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    return Array.isArray(response.value) ? response.value : [];
+  },
+
+  approveEligibleCommissions(): Promise<ApproveEligibleCommissionsResponse> {
+    return api("/admin/ambassadors/commissions/approve-eligible", {
+      method: "PATCH",
+    });
+  },
+
+  approveCommission(commissionId: string): Promise<AdminCommission> {
+    return api(`/admin/ambassadors/commissions/${commissionId}/approve`, {
+      method: "PATCH",
+    });
+  },
+
+  cancelCommission(
+    commissionId: string,
+    reason: string,
+  ): Promise<AdminCommission> {
+    return api(`/admin/ambassadors/commissions/${commissionId}/cancel`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        reason: reason.trim(),
       }),
     });
   },

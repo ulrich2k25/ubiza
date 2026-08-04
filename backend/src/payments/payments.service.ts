@@ -2,12 +2,13 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-
+import { TelegramService } from '../notifications/telegram.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   InitiatePaymentDto,
@@ -17,19 +18,27 @@ import { PaymentPricingService } from './payment-pricing.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { CamPayService } from './campay/campay.service';
 import type { CamPayWebhookPayload } from './campay/campay.types';
+import {
+  ManualPaymentOperator,
+  SubmitManualPaymentDto,
+} from './dto/submit-manual-payment.dto';
 
 const PAYMENT_EXPIRATION_MINUTES = 30;
+const MANUAL_PAYMENT_EXPIRATION_HOURS = 24;
 
 type PaidPremiumPlan = 'DAY_1' | 'DAYS_7' | 'DAYS_30';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentPricingService: PaymentPricingService,
     private readonly configService: ConfigService,
     private readonly referralsService: ReferralsService,
     private readonly camPayService: CamPayService,
+    private readonly telegramService: TelegramService,
   ) {}
 
   async initiate(userId: string, dto: InitiatePaymentDto) {
@@ -235,6 +244,191 @@ export class PaymentsService {
         status: camPayResponse.status,
         operator: camPayResponse.operator ?? null,
         ussdCode: camPayResponse.ussd_code ?? null,
+      },
+    };
+  }
+
+  async submitManualPayment(userId: string, dto: SubmitManualPaymentDto) {
+    this.validatePurchaseSelection(dto);
+
+    const price = this.paymentPricingService.getPrice(dto);
+
+    const payerPhone = dto.payerPhone.trim();
+    const transactionReference = dto.transactionReference.trim().toUpperCase();
+
+    const expiresAt = new Date(
+      Date.now() + MANUAL_PAYMENT_EXPIRATION_HOURS * 60 * 60 * 1000,
+    );
+
+    const providerTransactionId = `MANUAL-${dto.operator}-${transactionReference}`;
+
+    const existingPayment = await this.prisma.payment.findUnique({
+      where: {
+        providerTransactionId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (existingPayment) {
+      throw new BadRequestException(
+        'Cette référence de transaction a déjà été utilisée.',
+      );
+    }
+
+    const { payment, userLabel } = await this.prisma.$transaction(
+      async (transaction) => {
+        const user = await transaction.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            email: true,
+            deletedAt: true,
+            listings: {
+              where: {
+                deletedAt: null,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 1,
+              select: {
+                id: true,
+                status: true,
+                boostActiveUntil: true,
+              },
+            },
+          },
+        });
+
+        if (!user || user.deletedAt) {
+          throw new NotFoundException('Utilisateur introuvable.');
+        }
+
+        if (dto.purpose === InitiatePaymentPurpose.BOOST) {
+          const listing = user.listings[0] ?? null;
+
+          if (!listing) {
+            throw new BadRequestException(
+              "Vous devez créer une annonce avant d'acheter un Boost.",
+            );
+          }
+
+          if (listing.status !== 'PUBLISHED') {
+            throw new BadRequestException(
+              "Votre annonce doit être publiée avant d'acheter un Boost.",
+            );
+          }
+
+          if (
+            listing.boostActiveUntil &&
+            listing.boostActiveUntil.getTime() > Date.now()
+          ) {
+            throw new BadRequestException(
+              "Votre annonce bénéficie déjà d'un Boost actif.",
+            );
+          }
+        }
+
+        const currency = await transaction.currency.findUnique({
+          where: {
+            code: price.currencyCode,
+          },
+          select: {
+            id: true,
+            code: true,
+            symbol: true,
+            isActive: true,
+          },
+        });
+
+        if (!currency || !currency.isActive) {
+          throw new BadRequestException(
+            `La devise ${price.currencyCode} est indisponible.`,
+          );
+        }
+
+        const externalReference = `UBIZA-${randomUUID()}`;
+
+        const createdPayment = await transaction.payment.create({
+          data: {
+            userId,
+            currencyId: currency.id,
+            provider: 'MANUAL',
+            purpose: dto.purpose,
+            status: 'PENDING',
+            amount: price.amount,
+            externalReference,
+            providerTransactionId,
+            customerPhone: payerPhone,
+            providerData: {
+              description: price.description,
+              premiumPlan: price.premiumPlan ?? null,
+              boostDurationMinutes: price.durationMinutes ?? null,
+              manualPayment: {
+                operator: dto.operator,
+                payerPhone,
+                transactionReference,
+                submittedAt: new Date().toISOString(),
+              },
+            },
+            expiresAt,
+          },
+          select: {
+            id: true,
+            provider: true,
+            purpose: true,
+            status: true,
+            amount: true,
+            externalReference: true,
+            providerTransactionId: true,
+            customerPhone: true,
+            providerData: true,
+            expiresAt: true,
+            initiatedAt: true,
+            currency: {
+              select: {
+                code: true,
+                symbol: true,
+              },
+            },
+          },
+        });
+
+        return {
+          payment: createdPayment,
+          userLabel: user.email || user.id,
+        };
+      },
+    );
+    try {
+      await this.telegramService.sendManualPaymentNotification({
+        userLabel,
+        purpose: payment.purpose,
+        description: price.description,
+        amount: payment.amount.toString(),
+        currencyCode: payment.currency.code,
+        operator: dto.operator,
+        payerPhone,
+        transactionReference,
+        paymentId: payment.id,
+        submittedAt: payment.initiatedAt.toISOString(),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Le paiement manuel ${payment.id} a été enregistré, mais la notification Telegram a échoué.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
+    return {
+      message:
+        'Votre paiement a été envoyé pour vérification. Votre forfait sera activé au plus tard sous 24 heures.',
+      payment: {
+        ...payment,
+        amount: payment.amount.toString(),
       },
     };
   }
@@ -885,6 +1079,163 @@ export class PaymentsService {
       product: result.purpose === 'PREMIUM' ? 'PREMIUM' : 'BOOST',
     };
   }
+
+  async findAllManualPaymentsForAdmin(status?: string) {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        provider: 'MANUAL',
+        ...(status ? { status: status as any } : {}),
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        provider: true,
+        purpose: true,
+        status: true,
+        amount: true,
+        externalReference: true,
+        providerTransactionId: true,
+        customerPhone: true,
+        providerData: true,
+        failureReason: true,
+        initiatedAt: true,
+        paidAt: true,
+        failedAt: true,
+        cancelledAt: true,
+        expiresAt: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        currency: {
+          select: {
+            code: true,
+            symbol: true,
+          },
+        },
+      },
+    });
+
+    return payments.map((payment) => ({
+      ...payment,
+      amount: payment.amount.toString(),
+    }));
+  }
+
+  async approveManualPayment(paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: {
+        id: paymentId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        provider: true,
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Paiement introuvable.');
+    }
+
+    if (payment.provider !== 'MANUAL') {
+      throw new BadRequestException(
+        'Seuls les paiements manuels peuvent être approuvés ici.',
+      );
+    }
+
+    const configuredSecret = this.configService.get<string>(
+      'MANUAL_PAYMENT_SECRET',
+    );
+
+    if (!configuredSecret) {
+      throw new InternalServerErrorException(
+        'Le secret de confirmation manuelle est absent.',
+      );
+    }
+
+    return this.confirmManualPayment(
+      payment.userId,
+      payment.id,
+      configuredSecret,
+    );
+  }
+
+  async rejectManualPayment(paymentId: string, reason?: string) {
+    const rejectionReason =
+      reason?.trim() || 'Paiement introuvable ou informations incorrectes.';
+
+    const payment = await this.prisma.payment.findUnique({
+      where: {
+        id: paymentId,
+      },
+      select: {
+        id: true,
+        provider: true,
+        status: true,
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Paiement introuvable.');
+    }
+
+    if (payment.provider !== 'MANUAL') {
+      throw new BadRequestException(
+        'Seuls les paiements manuels peuvent être refusés ici.',
+      );
+    }
+
+    if (payment.status === 'SUCCESS') {
+      throw new BadRequestException(
+        'Un paiement déjà validé ne peut pas être refusé.',
+      );
+    }
+
+    if (
+      payment.status === 'FAILED' ||
+      payment.status === 'CANCELLED' ||
+      payment.status === 'EXPIRED'
+    ) {
+      throw new BadRequestException(
+        `Ce paiement est déjà clôturé avec le statut ${payment.status}.`,
+      );
+    }
+
+    const result = await this.prisma.payment.updateMany({
+      where: {
+        id: paymentId,
+        provider: 'MANUAL',
+        status: {
+          in: ['PENDING', 'PROCESSING'],
+        },
+      },
+      data: {
+        status: 'FAILED',
+        failedAt: new Date(),
+        failureReason: rejectionReason,
+      },
+    });
+
+    if (result.count === 0) {
+      throw new BadRequestException(
+        'Ce paiement est déjà traité ou ne peut plus être refusé.',
+      );
+    }
+
+    return {
+      message: 'Paiement manuel refusé.',
+      paymentId,
+      status: 'FAILED',
+      failureReason: rejectionReason,
+    };
+  }
+
   getPricing() {
     return {
       premium: [
@@ -1102,6 +1453,15 @@ export class PaymentsService {
         amount: true,
         startsAt: true,
         endsAt: true,
+      },
+    });
+
+    await transaction.user.update({
+      where: {
+        id: payment.userId,
+      },
+      data: {
+        premiumActiveUntil: endsAt,
       },
     });
 

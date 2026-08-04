@@ -83,6 +83,7 @@ export default function AmbassadorPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [codeCopied, setCodeCopied] = useState(false);
+  const [visiblePayoutCount, setVisiblePayoutCount] = useState(10);
 
   useEffect(() => {
     async function loadAmbassador() {
@@ -142,8 +143,13 @@ export default function AmbassadorPage() {
 
       setSuccess("Votre demande de paiement a été envoyée avec succès.");
 
-      const response = await ambassadorService.getMine();
+      const [response, payoutHistory] = await Promise.all([
+        ambassadorService.getMine(),
+        ambassadorService.getMyPayouts(),
+      ]);
+
       setAmbassador(response.ambassador);
+      setPayouts(payoutHistory);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -215,6 +221,23 @@ export default function AmbassadorPage() {
       setIsSubmitting(false);
     }
   }
+  const sortedPayouts = payouts
+    .filter((payout) => ["PAID", "FAILED", "CANCELLED"].includes(payout.status))
+    .sort(
+      (firstPayout, secondPayout) =>
+        new Date(
+          secondPayout.processedAt ??
+            secondPayout.paidAt ??
+            secondPayout.requestedAt,
+        ).getTime() -
+        new Date(
+          firstPayout.processedAt ??
+            firstPayout.paidAt ??
+            firstPayout.requestedAt,
+        ).getTime(),
+    );
+
+  const visiblePayouts = sortedPayouts.slice(0, visiblePayoutCount);
 
   if (isLoading) {
     return (
@@ -354,32 +377,49 @@ export default function AmbassadorPage() {
                     </p>
                   </div>
 
-                  <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-3xl border border-yellow-500/30 bg-yellow-500/10 p-7">
+                      <p className="text-lg font-medium text-yellow-300">
+                        🔍 Commissions en vérification
+                      </p>
+
+                      <p className="mt-5 text-3xl font-black text-yellow-50">
+                        {formatFcfa(ambassador.pendingBalance ?? 0)}
+                      </p>
+
+                      <p className="mt-3 text-sm text-yellow-100/65">
+                        Commissions reçues, en attente de validation après
+                        vérification.
+                      </p>
+                    </div>
+
                     <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-7">
                       <p className="text-lg font-medium text-green-300">
                         💰 Solde disponible
                       </p>
 
                       <p className="mt-5 text-3xl font-black text-green-50">
-                        {formatFcfa(ambassador.availableBalance)}
+                        {formatFcfa(ambassador.availableBalance ?? 0)}
                       </p>
 
                       <p className="mt-3 text-sm text-green-100/65">
-                        Commissions validées et disponibles.
+                        Commissions validées pouvant faire l’objet d’une demande
+                        de paiement.
                       </p>
                     </div>
 
-                    <div className="rounded-3xl border border-yellow-500/30 bg-yellow-500/10 p-7">
-                      <p className="text-lg font-medium text-yellow-300">
-                        ⏳ En attente
+                    <div className="rounded-3xl border border-orange-500/30 bg-orange-500/10 p-7">
+                      <p className="text-lg font-medium text-orange-300">
+                        🔄 Paiement en cours
                       </p>
 
-                      <p className="mt-5 text-3xl font-black text-yellow-50">
-                        {formatFcfa(ambassador.pendingBalance)}
+                      <p className="mt-5 text-3xl font-black text-orange-50">
+                        {formatFcfa(ambassador.processingBalance ?? 0)}
                       </p>
 
-                      <p className="mt-3 text-sm text-yellow-100/65">
-                        Commissions en cours de vérification.
+                      <p className="mt-3 text-sm text-orange-100/65">
+                        Paiement demandé et en attente de traitement par
+                        l’administration.
                       </p>
                     </div>
 
@@ -389,17 +429,17 @@ export default function AmbassadorPage() {
                       </p>
 
                       <p className="mt-5 text-3xl font-black text-blue-50">
-                        {formatFcfa(ambassador.paidBalance)}
+                        {formatFcfa(ambassador.paidBalance ?? 0)}
                       </p>
 
                       <p className="mt-3 text-sm text-blue-100/65">
-                        Total des commissions déjà versées.
+                        Total des commissions réellement versées.
                       </p>
                     </div>
 
                     <div className="rounded-3xl border border-pink-500/30 bg-pink-500/10 p-7">
                       <p className="text-lg font-medium text-pink-300">
-                        🏦 Paiement minimum
+                        🪙 Paiement minimum
                       </p>
 
                       <p className="mt-5 text-3xl font-black text-pink-50">
@@ -461,6 +501,7 @@ export default function AmbassadorPage() {
                       disabled={
                         isRequestingPayout ||
                         !ambassador.identityVerifiedAt ||
+                        Number(ambassador.processingBalance ?? 0) > 0 ||
                         Number(ambassador.availableBalance ?? 0) <
                           Number(ambassador.minimumPayout ?? 5000)
                       }
@@ -470,32 +511,35 @@ export default function AmbassadorPage() {
                         ? "Demande en cours..."
                         : !ambassador.identityVerifiedAt
                           ? "🪪 Vérification d'identité requise"
-                          : Number(ambassador.availableBalance ?? 0) <
-                              Number(ambassador.minimumPayout ?? 5000)
-                            ? "💰 Minimum non atteint"
-                            : "💰 Demander un paiement"}
+                          : Number(ambassador.processingBalance ?? 0) > 0
+                            ? "🔄 Paiement en cours de traitement"
+                            : Number(ambassador.availableBalance ?? 0) <
+                                Number(ambassador.minimumPayout ?? 5000)
+                              ? "💰 Minimum non atteint"
+                              : "💰 Demander un paiement"}
                     </button>
                   </div>
 
                   <div className="mt-12">
                     <div className="mb-5">
                       <h3 className="text-2xl font-black">
-                        Historique des paiements
+                        Historique des demandes de paiement
                       </h3>
 
                       <p className="mt-2 text-base text-white/55">
-                        Retrouvez toutes vos demandes de paiement.
+                        Retrouvez vos paiements effectués ainsi que les demandes
+                        refusées.
                       </p>
                     </div>
 
-                    {payouts.length === 0 ? (
+                    {sortedPayouts.length === 0 ? (
                       <div className="flex min-h-48 flex-col items-center justify-center rounded-3xl border border-white/10 bg-black/30 px-6 py-10 text-center">
                         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-2xl">
                           🧾
                         </div>
 
                         <p className="mt-5 text-lg font-bold text-white">
-                          Aucun paiement pour le moment.
+                          Aucun paiement reçu pour le moment.
                         </p>
 
                         <p className="mt-2 text-sm text-white/50">
@@ -506,7 +550,7 @@ export default function AmbassadorPage() {
                     ) : (
                       <div className="overflow-hidden rounded-3xl border border-white/10">
                         <div className="overflow-x-auto">
-                          <table className="w-full min-w-[700px] text-left text-sm">
+                          <table className="w-full min-w-[850px] text-left text-sm">
                             <thead className="bg-white/5 text-white/50">
                               <tr>
                                 <th className="px-6 py-4 font-medium">Date</th>
@@ -519,46 +563,75 @@ export default function AmbassadorPage() {
                                 <th className="px-6 py-4 font-medium">
                                   Référence
                                 </th>
+
+                                <th className="px-6 py-4 font-medium">Motif</th>
                               </tr>
                             </thead>
 
                             <tbody>
-                              {payouts.map((payout) => (
-                                <tr
-                                  key={payout.id}
-                                  className="border-t border-white/10 transition hover:bg-white/[0.03]"
-                                >
-                                  <td className="px-6 py-5 text-white/70">
-                                    {new Intl.DateTimeFormat("fr-FR", {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      year: "numeric",
-                                    }).format(new Date(payout.requestedAt))}
-                                  </td>
+                              {visiblePayouts.map((payout) => {
+                                const displayDate =
+                                  payout.paidAt ??
+                                  payout.processedAt ??
+                                  payout.requestedAt;
 
-                                  <td className="px-6 py-5 font-bold">
-                                    {formatFcfa(payout.amount)}
-                                  </td>
+                                return (
+                                  <tr
+                                    key={payout.id}
+                                    className="border-t border-white/10 transition hover:bg-white/[0.03]"
+                                  >
+                                    <td className="whitespace-nowrap px-6 py-5 text-white/70">
+                                      {new Intl.DateTimeFormat("fr-FR", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                      }).format(new Date(displayDate))}
+                                    </td>
 
-                                  <td className="px-6 py-5">
-                                    {payout.status === "PENDING" &&
-                                      "🟡 En attente"}
-                                    {payout.status === "PROCESSING" &&
-                                      "🔵 En traitement"}
-                                    {payout.status === "PAID" && "🟢 Payé"}
-                                    {payout.status === "FAILED" && "🔴 Échec"}
-                                    {payout.status === "CANCELLED" &&
-                                      "⚪ Annulé"}
-                                  </td>
+                                    <td className="whitespace-nowrap px-6 py-5 font-bold">
+                                      {formatFcfa(payout.amount)}
+                                    </td>
 
-                                  <td className="px-6 py-5 text-white/60">
-                                    {payout.paymentReference || "—"}
-                                  </td>
-                                </tr>
-                              ))}
+                                    <td className="whitespace-nowrap px-6 py-5">
+                                      {payout.status === "PAID" && "🟢 Payé"}
+                                      {payout.status === "FAILED" && "🔴 Échec"}
+                                      {payout.status === "CANCELLED" &&
+                                        "🔴 Refusé"}
+                                    </td>
+
+                                    <td className="px-6 py-5 text-white/60">
+                                      {payout.paymentReference || "—"}
+                                    </td>
+
+                                    <td className="max-w-xs whitespace-normal px-6 py-5 text-white/60">
+                                      {payout.status === "FAILED" ||
+                                      payout.status === "CANCELLED"
+                                        ? payout.failureReason ||
+                                          "Aucun motif communiqué."
+                                        : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
+
+                        {visiblePayoutCount < sortedPayouts.length ? (
+                          <div className="border-t border-white/10 p-5 text-center">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVisiblePayoutCount(
+                                  (currentCount) => currentCount + 10,
+                                )
+                              }
+                              className="rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+                            >
+                              Afficher plus
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>

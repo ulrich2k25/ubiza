@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import ManualPaymentForm from "@/components/payments/ManualPaymentForm";
 import { api } from "@/services/api";
 import {
   paymentsService,
@@ -25,14 +26,10 @@ export default function PremiumCard() {
 
   const [selectedPlan, setSelectedPlan] = useState<PremiumPlan>("DAYS_7");
 
-  const [phone, setPhone] = useState("");
-
   const [showPurchase, setShowPurchase] = useState(false);
-
   const [payment, setPayment] = useState<Payment | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -59,9 +56,14 @@ export default function PremiumCard() {
       });
   }, []);
 
+  /*
+   * Le polling automatique reste réservé aux paiements CamPay.
+   * Un paiement manuel attend l'approbation de l'administrateur.
+   */
   useEffect(() => {
     if (
       !payment ||
+      payment.provider === "MANUAL" ||
       payment.status === "SUCCESS" ||
       payment.status === "FAILED" ||
       payment.status === "CANCELLED" ||
@@ -125,35 +127,7 @@ export default function PremiumCard() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [payment?.id]);
-
-  async function createPayment() {
-    try {
-      setProcessing(true);
-      setError("");
-      setSuccess("");
-
-      const response = await paymentsService.createPremium(
-        selectedPlan,
-        phone.trim(),
-      );
-
-      setPayment(response.payment);
-
-      setSuccess(
-        response.message ||
-          "Paiement lancé. Confirmez la demande Mobile Money sur votre téléphone.",
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible d'initialiser le paiement.",
-      );
-    } finally {
-      setProcessing(false);
-    }
-  }
+  }, [payment?.id, payment?.provider]);
 
   const expirationDate = premium?.premiumActiveUntil
     ? new Intl.DateTimeFormat("fr-FR", {
@@ -187,7 +161,6 @@ export default function PremiumCard() {
 
   return (
     <article className="flex flex-col rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 to-violet-500/5 p-6">
-      {" "}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-fuchsia-400">Abonnement</p>
@@ -199,6 +172,7 @@ export default function PremiumCard() {
           {premium.isPremium ? "Actif" : "Standard"}
         </span>
       </div>
+
       {premium.isPremium ? (
         <div className="mt-6">
           <p className="text-lg font-semibold text-white">
@@ -214,7 +188,7 @@ export default function PremiumCard() {
           <div className="mt-5 space-y-3 text-sm">
             <Benefit label="Priorité dans les résultats" />
             <Benefit label="Statut Premium visible" />
-            <Benefit label="Visibilité renforcée sur Ubiza" />{" "}
+            <Benefit label="Visibilité renforcée sur Ubiza" />
           </div>
 
           <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
@@ -246,16 +220,18 @@ export default function PremiumCard() {
           <div className="mt-5 space-y-3 text-sm">
             <Benefit label="Priorité dans les résultats" />
             <Benefit label="Statut Premium visible" />
-            <Benefit label="Visibilité renforcée sur Ubiza" />{" "}
+            <Benefit label="Visibilité renforcée sur Ubiza" />
           </div>
         </div>
       )}
+
       <div className="mt-7 border-t border-white/10 pt-6">
         {!showPurchase ? (
           <button
             type="button"
             onClick={() => {
               setShowPurchase(true);
+              setPayment(null);
               setError("");
               setSuccess("");
             }}
@@ -277,15 +253,13 @@ export default function PremiumCard() {
               {!payment && (
                 <button
                   type="button"
-                  disabled={processing}
                   onClick={() => {
                     setShowPurchase(false);
-                    setPhone("");
                     setPayment(null);
                     setError("");
                     setSuccess("");
                   }}
-                  className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
+                  className="text-sm font-medium text-zinc-400 transition hover:text-white"
                 >
                   Fermer
                 </button>
@@ -300,8 +274,12 @@ export default function PremiumCard() {
                   <button
                     key={offer.plan}
                     type="button"
-                    disabled={processing || Boolean(payment)}
-                    onClick={() => setSelectedPlan(offer.plan)}
+                    disabled={Boolean(payment)}
+                    onClick={() => {
+                      setSelectedPlan(offer.plan);
+                      setError("");
+                      setSuccess("");
+                    }}
                     className={`rounded-xl border p-4 text-left transition ${
                       selected
                         ? "border-fuchsia-400 bg-fuchsia-500/15"
@@ -320,41 +298,20 @@ export default function PremiumCard() {
               })}
             </div>
 
-            {!payment && (
-              <div className="mt-5">
-                <label
-                  htmlFor="premium-phone"
-                  className="text-sm font-medium text-zinc-300"
-                >
-                  Numéro Mobile Money
-                </label>
-
-                <input
-                  id="premium-phone"
-                  type="tel"
-                  value={phone}
-                  disabled={processing}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="+237 6XX XXX XXX"
-                  autoComplete="tel"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-zinc-600 focus:border-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-
-                <button
-                  type="button"
-                  disabled={processing || phone.trim().length < 8}
-                  onClick={createPayment}
-                  className="mt-4 w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-4 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {processing
-                    ? "Création du paiement..."
-                    : `${premium.isPremium ? "Prolonger" : "Acheter Premium"}${
-                        selectedOffer
-                          ? ` pour ${formatAmount(selectedOffer.amount)} FCFA`
-                          : ""
-                      }`}
-                </button>
-              </div>
+            {!payment && selectedOffer && (
+              <ManualPaymentForm
+                purpose="PREMIUM"
+                premiumPlan={selectedPlan}
+                amount={selectedOffer.amount}
+                onSubmitted={(submittedPayment, message) => {
+                  setPayment(submittedPayment);
+                  setSuccess(
+                    message ||
+                      "Votre paiement a été envoyé pour vérification. Votre forfait sera activé au plus tard sous 24 heures.",
+                  );
+                  setError("");
+                }}
+              />
             )}
 
             {payment && (
@@ -362,7 +319,9 @@ export default function PremiumCard() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm text-zinc-400">
-                      Paiement à effectuer
+                      {payment.provider === "MANUAL"
+                        ? "Paiement transmis"
+                        : "Paiement à effectuer"}
                     </p>
 
                     <p className="mt-1 text-xl font-bold text-white">
@@ -377,16 +336,18 @@ export default function PremiumCard() {
 
                 <div className="mt-4 space-y-3 text-sm">
                   <div>
-                    <p className="text-zinc-500">Référence</p>
+                    <p className="text-zinc-500">Référence Ubiza</p>
 
                     <p className="mt-1 break-all font-medium text-zinc-200">
-                      {payment.externalReference}
+                      {payment.externalReference || "Non disponible"}
                     </p>
                   </div>
 
                   {payment.customerPhone && (
                     <div>
-                      <p className="text-zinc-500">Numéro</p>
+                      <p className="text-zinc-500">
+                        Numéro ayant effectué le paiement
+                      </p>
 
                       <p className="mt-1 font-medium text-zinc-200">
                         {payment.customerPhone}
@@ -396,34 +357,37 @@ export default function PremiumCard() {
                 </div>
 
                 <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  Confirmez la demande Mobile Money sur votre téléphone. Cette
-                  page vérifiera automatiquement le paiement et activera votre
-                  abonnement.
+                  {payment.provider === "MANUAL"
+                    ? "Vos informations de transaction ont été transmises. Après vérification, votre abonnement sera activé au plus tard sous 24 heures."
+                    : "Confirmez la demande Mobile Money sur votre téléphone. Cette page vérifiera automatiquement le paiement et activera votre abonnement."}
                 </p>
 
-                {payment.status === "PENDING" ||
-                payment.status === "PROCESSING" ? (
+                {(payment.status === "PENDING" ||
+                  payment.status === "PROCESSING") && (
                   <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
+                    {payment.provider === "CAMPAY" && (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
+                    )}
 
                     <p className="text-sm text-amber-200">
-                      En attente de la confirmation Mobile Money…
+                      {payment.provider === "MANUAL"
+                        ? "Paiement en attente de vérification par Ubiza."
+                        : "En attente de la confirmation Mobile Money…"}
                     </p>
                   </div>
-                ) : null}
+                )}
 
                 {(payment.status === "FAILED" ||
                   payment.status === "CANCELLED" ||
                   payment.status === "EXPIRED") && (
                   <button
                     type="button"
-                    disabled={processing}
                     onClick={() => {
                       setPayment(null);
                       setSuccess("");
                       setError("");
                     }}
-                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5"
                   >
                     Réessayer avec un autre paiement
                   </button>
