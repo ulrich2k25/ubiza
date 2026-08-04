@@ -126,7 +126,9 @@ export default function HomeStories({ stories }: HomeStoriesProps) {
       return;
     }
 
-    setProgress(0);
+    const resetTimer = window.setTimeout(() => {
+      setProgress(0);
+    }, 0);
 
     const startedAt = Date.now();
 
@@ -148,7 +150,10 @@ export default function HomeStories({ stories }: HomeStoriesProps) {
       }
     }, PROGRESS_INTERVAL);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      window.clearTimeout(resetTimer);
+      window.clearInterval(intervalId);
+    };
   }, [
     activeCreator,
     activeIndex,

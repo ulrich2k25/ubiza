@@ -25,10 +25,13 @@ export default function FavoriteButton({
 
   useEffect(() => {
     if (!isAuthReady || !isAuthenticated) {
-      setIsFavorite(false);
-      setIsLoadingStatus(false);
-      setError(null);
-      return;
+      const timer = window.setTimeout(() => {
+        setIsFavorite(false);
+        setIsLoadingStatus(false);
+        setError(null);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let isCancelled = false;

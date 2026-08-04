@@ -26,7 +26,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
 
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [activatingCredit, setActivatingCredit] = useState(false);
-  const [processingPayment, setProcessingPayment] = useState(false);
   const [refreshingAfterExpiry, setRefreshingAfterExpiry] = useState(false);
 
   const [error, setError] = useState("");
@@ -123,7 +122,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [payment?.id]);
+  }, [payment, onUpdated]);
 
   useEffect(() => {
     const shouldOpen = searchParams.get("openBoost") === "1";
@@ -132,26 +131,33 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
       return;
     }
 
-    setShowPurchase(true);
+    const openTimer = window.setTimeout(() => {
+      setShowPurchase(true);
+    }, 0);
 
-    const timer = window.setTimeout(() => {
+    const scrollTimer = window.setTimeout(() => {
       document.getElementById("boost")?.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
     }, 150);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(openTimer);
+      window.clearTimeout(scrollTimer);
+    };
   }, [searchParams]);
 
   useEffect(() => {
     if (!boost.isBoostActive || !boost.boostActiveUntil) {
-      setRemaining("");
-      setRefreshingAfterExpiry(false);
-      return;
+      const timer = window.setTimeout(() => {
+        setRemaining("");
+        setRefreshingAfterExpiry(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
-    let interval: ReturnType<typeof setInterval> | undefined;
     let isCancelled = false;
 
     const updateCountdown = async () => {
@@ -199,7 +205,7 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
 
     void updateCountdown();
 
-    interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       void updateCountdown();
     }, 1000);
 
@@ -368,7 +374,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
               {!payment && (
                 <button
                   type="button"
-                  disabled={processingPayment}
                   onClick={() => {
                     setShowPurchase(false);
 
@@ -482,7 +487,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                   payment.status === "EXPIRED") && (
                   <button
                     type="button"
-                    disabled={processingPayment}
                     onClick={() => {
                       setPayment(null);
                       setError("");

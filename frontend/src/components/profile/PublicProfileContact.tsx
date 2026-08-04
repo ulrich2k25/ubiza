@@ -29,10 +29,13 @@ export default function PublicProfileContact({
 
   useEffect(() => {
     if (!isAuthReady || !isAuthenticated) {
-      setContact(null);
-      setError(null);
-      setIsLoading(false);
-      return;
+      const timer = window.setTimeout(() => {
+        setContact(null);
+        setError(null);
+        setIsLoading(false);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     let isCancelled = false;

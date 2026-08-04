@@ -13,6 +13,7 @@ import {
 const initialForm: ApplyAmbassadorPayload = {
   fullName: "",
   mobileMoneyNumber: "",
+  whatsappNumber: "",
   identityNumber: "",
   country: "Cameroun",
   acceptTerms: false,
@@ -73,7 +74,7 @@ export default function AmbassadorPage() {
   const [hasApplied, setHasApplied] = useState(false);
 
   const [form, setForm] = useState<ApplyAmbassadorPayload>(initialForm);
-
+  const [sameAsMobileMoney, setSameAsMobileMoney] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRequestingPayout, setIsRequestingPayout] = useState(false);
@@ -101,13 +102,23 @@ export default function AmbassadorPage() {
         setPayouts(payoutHistory);
 
         if (response.ambassador?.status === "REJECTED") {
+          const mobileMoneyNumber = response.ambassador.mobileMoneyNumber || "";
+
+          const whatsappNumber =
+            response.ambassador.whatsappNumber || mobileMoneyNumber;
+
           setForm({
             fullName: response.ambassador.fullName || "",
-            mobileMoneyNumber: response.ambassador.mobileMoneyNumber || "",
+            mobileMoneyNumber,
+            whatsappNumber,
             identityNumber: response.ambassador.identityNumber || "",
             country: response.ambassador.country || "Cameroun",
             acceptTerms: false,
           });
+
+          setSameAsMobileMoney(
+            Boolean(mobileMoneyNumber) && mobileMoneyNumber === whatsappNumber,
+          );
         }
       } catch (requestError) {
         setError(
@@ -200,9 +211,21 @@ export default function AmbassadorPage() {
     try {
       setIsSubmitting(true);
 
+      const mobileMoneyNumber = form.mobileMoneyNumber.trim();
+
+      const whatsappNumber = sameAsMobileMoney
+        ? mobileMoneyNumber
+        : form.whatsappNumber.trim();
+
+      if (!whatsappNumber) {
+        setError("Veuillez renseigner votre numéro WhatsApp.");
+        return;
+      }
+
       const createdAmbassador = await ambassadorService.apply({
         fullName: form.fullName.trim(),
-        mobileMoneyNumber: form.mobileMoneyNumber.trim(),
+        mobileMoneyNumber,
+        whatsappNumber,
         identityNumber: form.identityNumber.trim(),
         country: form.country.trim(),
         acceptTerms: form.acceptTerms,
@@ -285,8 +308,8 @@ export default function AmbassadorPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60">
-            Recommandez Ubiza à de nouvelles créatrices et recevez une
-            commission lorsqu’elles réalisent leur premier achat éligible.
+            Recommandez Ubiza à de nouvelles profils et recevez une commission
+            lorsqu’ils réalisent leur premier achat éligible.
           </p>
         </div>
 
@@ -454,7 +477,7 @@ export default function AmbassadorPage() {
 
                   <div className="mt-8 rounded-3xl border border-white/10 bg-black/30 p-6">
                     <h3 className="text-xl font-bold">
-                      Vérification d'identité
+                      Vérification d&apos;identité
                     </h3>
 
                     {!ambassador.identityVerifiedAt &&
@@ -462,7 +485,7 @@ export default function AmbassadorPage() {
                         <>
                           <p className="mt-3 text-sm text-white/60">
                             Avant votre premier paiement, votre identité doit
-                            être vérifiée par l'équipe Ubiza.
+                            être vérifiée par l&apos;équipe Ubiza.
                           </p>
 
                           <button
@@ -482,7 +505,7 @@ export default function AmbassadorPage() {
                       !ambassador.identityVerifiedAt && (
                         <p className="mt-3 text-sm text-yellow-300">
                           🟡 Votre demande de vérification a été envoyée.
-                          L'équipe Ubiza vous contactera si nécessaire.
+                          L&apos;équipe Ubiza vous contactera si nécessaire.
                         </p>
                       )}
 
@@ -677,23 +700,70 @@ export default function AmbassadorPage() {
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium">
-                  Numéro Mobile Money
-                </span>
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium">
+                    Numéro Mobile Money *
+                  </span>
 
-                <input
-                  type="tel"
-                  value={form.mobileMoneyNumber}
-                  onChange={(event) =>
-                    updateField("mobileMoneyNumber", event.target.value)
-                  }
-                  maxLength={30}
-                  required
-                  placeholder="+237 6..."
-                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-pink-500"
-                />
-              </label>
+                  <input
+                    type="tel"
+                    value={form.mobileMoneyNumber}
+                    onChange={(event) =>
+                      updateField("mobileMoneyNumber", event.target.value)
+                    }
+                    maxLength={30}
+                    required
+                    placeholder="+237 6XX XX XX XX"
+                    className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-pink-500"
+                  />
+
+                  <p className="mt-2 text-xs leading-5 text-white/50">
+                    Ce numéro sera utilisé pour effectuer vos futurs paiements.
+                  </p>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <input
+                    type="checkbox"
+                    checked={sameAsMobileMoney}
+                    onChange={(event) =>
+                      setSameAsMobileMoney(event.target.checked)
+                    }
+                    className="mt-1 h-4 w-4 accent-pink-500"
+                  />
+
+                  <span className="text-sm leading-6 text-white/65">
+                    Ce numéro est également disponible sur WhatsApp.
+                  </span>
+                </label>
+
+                {!sameAsMobileMoney && (
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium">
+                      Numéro WhatsApp *
+                    </span>
+
+                    <input
+                      type="tel"
+                      value={form.whatsappNumber}
+                      onChange={(event) =>
+                        updateField("whatsappNumber", event.target.value)
+                      }
+                      maxLength={30}
+                      required
+                      placeholder="+237 6XX XX XX XX"
+                      className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-pink-500"
+                    />
+
+                    <p className="mt-2 text-xs leading-5 text-white/50">
+                      Ce numéro sera utilisé par l’équipe Ubiza pour vous
+                      contacter concernant la vérification de votre identité et
+                      le suivi de vos paiements.
+                    </p>
+                  </label>
+                )}
+              </div>
 
               <label className="block">
                 <span className="mb-2 block text-sm font-medium">

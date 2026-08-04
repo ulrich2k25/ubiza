@@ -25,9 +25,15 @@ export default function RegisterPage() {
     const params = new URLSearchParams(window.location.search);
     const referralCodeFromUrl = params.get("ref");
 
-    if (referralCodeFromUrl) {
-      setReferralCode(referralCodeFromUrl.trim().toUpperCase());
+    if (!referralCodeFromUrl) {
+      return;
     }
+
+    const timer = window.setTimeout(() => {
+      setReferralCode(referralCodeFromUrl.trim().toUpperCase());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   function getSafeNextPath() {

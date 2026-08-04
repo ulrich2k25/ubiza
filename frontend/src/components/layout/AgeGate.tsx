@@ -13,8 +13,12 @@ export default function AgeGate() {
   useEffect(() => {
     const alreadyConfirmed = sessionStorage.getItem(SESSION_KEY) === "true";
 
-    setIsVisible(!alreadyConfirmed);
-    setIsReady(true);
+    const timer = window.setTimeout(() => {
+      setIsVisible(!alreadyConfirmed);
+      setIsReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   function handleEnter() {

@@ -12,7 +12,7 @@ export default function CitiesPage() {
             href="/"
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
           >
-            ← Retour à l'accueil
+            ← ← Retour à l&apos;accueil
           </Link>
 
           <h1 className="text-3xl font-black sm:text-4xl">Toutes les villes</h1>

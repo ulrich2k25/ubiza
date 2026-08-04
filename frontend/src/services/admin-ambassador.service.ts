@@ -65,6 +65,7 @@ export interface AdminAmbassadorPayout {
     fullName: string;
     country: string;
     mobileMoneyNumber: string;
+    whatsappNumber: string | null;
     referralCode: string | null;
     identityVerifiedAt: string | null;
 

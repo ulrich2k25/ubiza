@@ -14,9 +14,12 @@ function VerifyEmailContent() {
     const token = searchParams.get("token");
 
     if (!token) {
-      setError(true);
-      setMessage("Lien de vérification invalide.");
-      return;
+      const timer = window.setTimeout(() => {
+        setError(true);
+        setMessage("Lien de vérification invalide.");
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
 
     authService

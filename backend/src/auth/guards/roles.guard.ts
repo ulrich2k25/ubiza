@@ -1,4 +1,4 @@
-﻿import {
+import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
@@ -13,7 +13,7 @@ interface AuthenticatedRequest {
   user?: {
     id: string;
     email: string;
-    role: UserRole | string;
+    role: UserRole;
   };
 }
 
@@ -37,9 +37,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Accès interdit.');
     }
 
-    const hasRequiredRole = requiredRoles.includes(
-      request.user.role as UserRole,
-    );
+    const hasRequiredRole = requiredRoles.includes(request.user.role);
 
     if (!hasRequiredRole) {
       throw new ForbiddenException(

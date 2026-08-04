@@ -89,8 +89,8 @@ export default function ReferralsPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
-              Invitez de nouvelles créatrices sur Ubiza. Lorsqu&apos;une
-              filleule publie sa première annonce, vous recevez automatiquement
+              Invitez de nouveaux profils sur Ubiza. Lorsqu&apos;un profil
+              parrainé publie sa première annonce, vous recevez automatiquement
               un crédit Boost.
             </p>
           </div>
@@ -250,7 +250,7 @@ export default function ReferralsPage() {
             <StepCard
               number="1"
               title="Partagez votre lien"
-              description="Envoyez votre lien personnel à une nouvelle créatrice."
+              description="Envoyez votre lien personnel à un nouveau profil."
             />
 
             <StepCard
@@ -290,7 +290,7 @@ function MoneySection({
         </h2>
 
         <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300">
-          Recommandez Ubiza à de nouvelles créatrices et recevez des commissions
+          Recommandez Ubiza à de nouveaux profils et recevez des commissions
           lorsqu&apos;elles effectuent leur premier achat éligible.
         </p>
 

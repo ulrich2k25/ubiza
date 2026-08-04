@@ -69,7 +69,11 @@ export default function StoriesManager() {
   }, []);
 
   useEffect(() => {
-    void loadStories();
+    const timer = window.setTimeout(() => {
+      void loadStories();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadStories]);
 
   useEffect(() => {

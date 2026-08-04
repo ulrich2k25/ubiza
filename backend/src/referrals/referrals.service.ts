@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 
+import type { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const AMBASSADOR_COMMISSION_RATE = 0.25;
@@ -170,12 +171,12 @@ export class ReferralsService {
   }
 
   async handleFirstSuccessfulPurchase(
-    transaction: any,
+    transaction: Prisma.TransactionClient,
     payment: {
       id: string;
       userId: string;
       currencyId: string;
-      amount: any;
+      amount: Prisma.Decimal;
     },
   ) {
     const referredUser = await transaction.user.findUnique({

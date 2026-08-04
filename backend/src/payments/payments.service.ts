@@ -8,20 +8,24 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+
+import { PaymentStatus, type Prisma } from '../../generated/prisma/client';
 import { TelegramService } from '../notifications/telegram.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   InitiatePaymentDto,
   InitiatePaymentPurpose,
+  PurchasableBoostDuration,
+  PurchasablePremiumPlan,
 } from './dto/initiate-payment.dto';
 import { PaymentPricingService } from './payment-pricing.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { CamPayService } from './campay/campay.service';
-import type { CamPayWebhookPayload } from './campay/campay.types';
-import {
-  ManualPaymentOperator,
-  SubmitManualPaymentDto,
-} from './dto/submit-manual-payment.dto';
+import type {
+  CamPayCollectResponse,
+  CamPayWebhookPayload,
+} from './campay/campay.types';
+import { SubmitManualPaymentDto } from './dto/submit-manual-payment.dto';
 
 const PAYMENT_EXPIRATION_MINUTES = 30;
 const MANUAL_PAYMENT_EXPIRATION_HOURS = 24;
@@ -170,7 +174,7 @@ export class PaymentsService {
     if (!dto.customerPhone?.trim()) {
       throw new BadRequestException('Le numéro Mobile Money est obligatoire.');
     }
-    let camPayResponse;
+    let camPayResponse: CamPayCollectResponse;
 
     try {
       camPayResponse = await this.camPayService.collect({
@@ -207,7 +211,7 @@ export class PaymentsService {
           description: price.description,
           premiumPlan: price.premiumPlan ?? null,
           boostDurationMinutes: price.durationMinutes ?? null,
-          campay: camPayResponse,
+          campay: camPayResponse as unknown as Prisma.InputJsonValue,
         },
       },
       select: {
@@ -1084,7 +1088,7 @@ export class PaymentsService {
     const payments = await this.prisma.payment.findMany({
       where: {
         provider: 'MANUAL',
-        ...(status ? { status: status as any } : {}),
+        ...(status ? { status: status as PaymentStatus } : {}),
       },
       orderBy: {
         createdAt: 'desc',
@@ -1243,21 +1247,21 @@ export class PaymentsService {
           plan: 'DAY_1',
           amount: this.paymentPricingService.getPrice({
             purpose: InitiatePaymentPurpose.PREMIUM,
-            premiumPlan: 'DAY_1' as any,
+            premiumPlan: PurchasablePremiumPlan.DAY_1,
           }).amount,
         },
         {
           plan: 'DAYS_7',
           amount: this.paymentPricingService.getPrice({
             purpose: InitiatePaymentPurpose.PREMIUM,
-            premiumPlan: 'DAYS_7' as any,
+            premiumPlan: PurchasablePremiumPlan.DAYS_7,
           }).amount,
         },
         {
           plan: 'DAYS_30',
           amount: this.paymentPricingService.getPrice({
             purpose: InitiatePaymentPurpose.PREMIUM,
-            premiumPlan: 'DAYS_30' as any,
+            premiumPlan: PurchasablePremiumPlan.DAYS_30,
           }).amount,
         },
       ],
@@ -1267,7 +1271,7 @@ export class PaymentsService {
           duration: 'MINUTES_60',
           amount: this.paymentPricingService.getPrice({
             purpose: InitiatePaymentPurpose.BOOST,
-            boostDuration: 'MINUTES_60' as any,
+            boostDuration: PurchasableBoostDuration.MINUTES_60,
           }).amount,
         },
       ],
@@ -1396,12 +1400,12 @@ export class PaymentsService {
   }
 
   private async activatePremiumPurchase(
-    transaction: any,
+    transaction: Prisma.TransactionClient,
     payment: {
       id: string;
       userId: string;
       currencyId: string;
-      amount: any;
+      amount: Prisma.Decimal;
       providerData: unknown;
     },
     now: Date,
@@ -1472,12 +1476,12 @@ export class PaymentsService {
   }
 
   private async activateBoostPurchase(
-    transaction: any,
+    transaction: Prisma.TransactionClient,
     payment: {
       id: string;
       userId: string;
       currencyId: string;
-      amount: any;
+      amount: Prisma.Decimal;
       providerData: unknown;
       user: {
         listings: Array<{

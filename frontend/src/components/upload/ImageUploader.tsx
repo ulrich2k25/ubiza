@@ -12,6 +12,14 @@ import { detectFace } from "@/services/face-detection.service";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
+const EMPTY_EXISTING_IMAGES: ListingImage[] = [];
+
+function withCacheBuster(url: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+
+  return `${url}${separator}v=${Date.now()}`;
+}
+
 interface ImageUploaderProps {
   maxImages?: number;
   existingImages?: ListingImage[];
@@ -45,7 +53,7 @@ function loadImageElement(url: string): Promise<HTMLImageElement> {
 
 export default function ImageUploader({
   maxImages = 10,
-  existingImages = [],
+  existingImages = EMPTY_EXISTING_IMAGES,
   onImagesChange,
   onExistingImageRemove,
   onExistingImageSetPrimary,
@@ -68,7 +76,11 @@ export default function ImageUploader({
   const [faceBlurError, setFaceBlurError] = useState<string | null>(null);
 
   useEffect(() => {
-    setOrderedImages(existingImages);
+    const timer = window.setTimeout(() => {
+      setOrderedImages(existingImages);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [existingImages]);
 
   useEffect(() => {
@@ -141,7 +153,7 @@ export default function ImageUploader({
       const imageUrl = getAbsoluteImageUrl(image.url);
 
       const imageElement = await loadImageElement(
-        `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}v=${Date.now()}`,
+        withCacheBuster(imageUrl),
       );
 
       const faceBox = await detectFace(imageElement);

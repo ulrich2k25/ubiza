@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 
 import {
   adminAmbassadorService,
@@ -143,31 +143,13 @@ export default function AdminAmbassadorDetailsPage({
   }, [id]);
 
   useEffect(() => {
-    void loadAmbassador();
+    const timer = window.setTimeout(() => {
+      void loadAmbassador();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadAmbassador]);
 
-  const finances = useMemo(() => {
-    const commissions = ambassador?.commissions ?? [];
-
-    const pendingBalance = commissions
-      .filter((commission) => commission.status === "PENDING")
-      .reduce((sum, commission) => sum + Number(commission.amount || 0), 0);
-
-    const availableBalance = commissions
-      .filter((commission) => commission.status === "APPROVED")
-      .reduce((sum, commission) => sum + Number(commission.amount || 0), 0);
-
-    const paidBalance = commissions
-      .filter((commission) => commission.status === "PAID")
-      .reduce((sum, commission) => sum + Number(commission.amount || 0), 0);
-
-    return {
-      pendingBalance,
-      availableBalance,
-      paidBalance,
-      totalEarnings: pendingBalance + availableBalance + paidBalance,
-    };
-  }, [ambassador]);
 
   async function runAmbassadorAction(
     action: () => Promise<AdminAmbassador>,
@@ -634,6 +616,7 @@ export default function AdminAmbassadorDetailsPage({
           <InfoItem label="Pays" value={ambassador.country} />
 
           <InfoItem label="Mobile Money" value={ambassador.mobileMoneyNumber} />
+          <InfoItem label="WhatsApp" value={ambassador.whatsappNumber} />
 
           <InfoItem
             label="Pièce d’identité"

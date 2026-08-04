@@ -18,6 +18,7 @@ interface PremiumStatus {
   premiumTrialUsed: boolean;
   premiumTrialStartedAt: string | null;
   premiumActiveUntil: string | null;
+  trialDurationDays: number;
 }
 
 export default function PremiumCard() {
@@ -30,6 +31,7 @@ export default function PremiumCard() {
   const [payment, setPayment] = useState<Payment | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [isStartingTrial, setIsStartingTrial] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -45,16 +47,47 @@ export default function PremiumCard() {
 
     setPricing(response);
   }
+  async function startFreeTrial() {
+    try {
+      setIsStartingTrial(true);
+      setError("");
+      setSuccess("");
 
-  useEffect(() => {
-    Promise.all([loadPremium(), loadPricing()])
-      .catch((err: Error) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
+      const response = await api("/premium/trial", {
+        method: "POST",
       });
+
+      setPremium(response as PremiumStatus);
+      setSuccess(
+        "Votre essai Premium gratuit de 3 jours est maintenant actif.",
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Impossible d’activer votre essai Premium gratuit.",
+      );
+    } finally {
+      setIsStartingTrial(false);
+    }
+  }
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      Promise.all([loadPremium(), loadPricing()])
+        .catch((err: Error) => {
+          setError(err.message);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
+
+  const paymentId = payment?.id;
+  const paymentProvider = payment?.provider;
+  const paymentStatus = payment?.status;
 
   /*
    * Le polling automatique reste réservé aux paiements CamPay.
@@ -62,12 +95,12 @@ export default function PremiumCard() {
    */
   useEffect(() => {
     if (
-      !payment ||
-      payment.provider === "MANUAL" ||
-      payment.status === "SUCCESS" ||
-      payment.status === "FAILED" ||
-      payment.status === "CANCELLED" ||
-      payment.status === "EXPIRED"
+      !paymentId ||
+      paymentProvider === "MANUAL" ||
+      paymentStatus === "SUCCESS" ||
+      paymentStatus === "FAILED" ||
+      paymentStatus === "CANCELLED" ||
+      paymentStatus === "EXPIRED"
     ) {
       return;
     }
@@ -76,7 +109,7 @@ export default function PremiumCard() {
 
     const intervalId = window.setInterval(async () => {
       try {
-        const refreshedPayment = await paymentsService.getOne(payment.id);
+        const refreshedPayment = await paymentsService.getOne(paymentId);
 
         if (cancelled) {
           return;
@@ -127,7 +160,7 @@ export default function PremiumCard() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [payment?.id, payment?.provider]);
+  }, [paymentId, paymentProvider, paymentStatus]);
 
   const expirationDate = premium?.premiumActiveUntil
     ? new Intl.DateTimeFormat("fr-FR", {
@@ -222,6 +255,37 @@ export default function PremiumCard() {
             <Benefit label="Statut Premium visible" />
             <Benefit label="Visibilité renforcée sur Ubiza" />
           </div>
+
+          {!premium.premiumTrialUsed ? (
+            <div className="mt-6 rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 p-4">
+              <p className="font-semibold text-white">
+                Essayez Premium gratuitement pendant {premium.trialDurationDays}{" "}
+                jours
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Activez votre essai quand vous êtes prêt à profiter d’une
+                meilleure visibilité. L’essai ne peut être utilisé qu’une seule
+                fois.
+              </p>
+
+              <button
+                type="button"
+                onClick={startFreeTrial}
+                disabled={isStartingTrial}
+                className="mt-4 w-full rounded-xl bg-fuchsia-600 px-4 py-3 font-semibold text-white transition hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isStartingTrial
+                  ? "Activation en cours..."
+                  : `Activer mon essai gratuit de ${premium.trialDurationDays} jours`}
+              </button>
+            </div>
+          ) : (
+            <p className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-400">
+              Votre essai Premium gratuit a déjà été utilisé. Vous pouvez
+              choisir un forfait pour réactiver Premium.
+            </p>
+          )}
         </div>
       )}
 

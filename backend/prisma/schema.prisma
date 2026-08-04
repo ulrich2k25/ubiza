@@ -117,7 +117,7 @@ enum BoostSource {
 }
 
 enum PremiumPlan {
-  TRIAL_7_DAYS
+  TRIAL_3_DAYS
   DAY_1
   DAYS_7
   DAYS_30
@@ -883,6 +883,7 @@ model Ambassador {
   status            AmbassadorStatus @default(PENDING)
   fullName          String?
   mobileMoneyNumber String?
+  whatsappNumber    String?
   identityNumber    String?
   country           String?
   termsAcceptedAt   DateTime?

@@ -10,6 +10,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
 
+import type { Prisma } from '../../generated/prisma/client';
+
 import { BCRYPT_ROUNDS } from '../common/constants/auth.constants';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,6 +20,28 @@ import { TrustService } from '../trust/trust.service';
 
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+
+type RegisteredUser = Prisma.UserGetPayload<{
+  select: {
+    id: true;
+    email: true;
+    role: true;
+    status: true;
+    referralCode: true;
+    createdAt: true;
+    premiumTrialUsed: true;
+    premiumTrialStartedAt: true;
+    premiumActiveUntil: true;
+    profile: {
+      select: {
+        id: true;
+        username: true;
+        displayName: true;
+        avatarUrl: true;
+      };
+    };
+  };
+}>;
 
 @Injectable()
 export class AuthService {
@@ -195,14 +219,9 @@ export class AuthService {
 
     const emailVerificationToken = this.generateEmailVerificationToken();
 
-    const premiumTrialStartedAt = new Date();
-
-    const premiumActiveUntil = new Date(premiumTrialStartedAt);
-    premiumActiveUntil.setDate(premiumActiveUntil.getDate() + 7);
-
     const displayName = `${dto.firstName.trim()} ${dto.lastName.trim()}`;
 
-    let user;
+    let user: RegisteredUser;
 
     try {
       user = await this.prisma.user.create({
@@ -211,10 +230,6 @@ export class AuthService {
           passwordHash,
           referralCode,
           referredById,
-
-          premiumTrialUsed: true,
-          premiumTrialStartedAt,
-          premiumActiveUntil,
 
           profile: {
             create: {
@@ -225,16 +240,6 @@ export class AuthService {
 
           settings: {
             create: {},
-          },
-
-          premiumSubscriptions: {
-            create: {
-              plan: 'TRIAL_7_DAYS',
-              source: 'TRIAL',
-              status: 'ACTIVE',
-              startsAt: premiumTrialStartedAt,
-              endsAt: premiumActiveUntil,
-            },
           },
 
           verificationTokens: {

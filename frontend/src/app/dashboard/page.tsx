@@ -19,7 +19,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [boost, setBoost] = useState<BoostStatus | null>(null);
-  const [activatingBoost, setActivatingBoost] = useState(false);
 
   const { logout } = useAuth();
 

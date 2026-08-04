@@ -1,6 +1,7 @@
 import { api } from "@/services/api";
 
 export type AmbassadorStatus = "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED";
+
 export interface Ambassador {
   id: string;
   userId: string;
@@ -9,6 +10,7 @@ export interface Ambassador {
 
   fullName: string | null;
   mobileMoneyNumber: string | null;
+  whatsappNumber: string | null;
   identityNumber: string | null;
   country: string | null;
 
@@ -60,6 +62,7 @@ export interface Payout {
 export interface ApplyAmbassadorPayload {
   fullName: string;
   mobileMoneyNumber: string;
+  whatsappNumber: string;
   identityNumber: string;
   country: string;
   acceptTerms: boolean;
@@ -82,11 +85,13 @@ export const ambassadorService = {
       method: "POST",
     });
   },
+
   requestPayout() {
     return api("/ambassadors/request-payout", {
       method: "POST",
     });
   },
+
   getMyPayouts(): Promise<Payout[]> {
     return api("/ambassadors/payouts");
   },

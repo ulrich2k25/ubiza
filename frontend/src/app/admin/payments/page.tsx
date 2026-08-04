@@ -52,7 +52,11 @@ export default function AdminPaymentsPage() {
   }, [filter]);
 
   useEffect(() => {
-    void loadPayments();
+    const timer = window.setTimeout(() => {
+      void loadPayments();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadPayments]);
 
   async function approvePayment(payment: AdminManualPayment) {

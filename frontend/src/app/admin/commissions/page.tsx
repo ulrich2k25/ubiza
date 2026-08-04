@@ -59,7 +59,11 @@ export default function AdminCommissionsPage() {
   }, []);
 
   useEffect(() => {
-    void loadCommissions();
+    const timer = window.setTimeout(() => {
+      void loadCommissions();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadCommissions]);
 
   const filteredCommissions = useMemo(() => {

@@ -80,6 +80,7 @@ export class AmbassadorsService {
           data: {
             fullName: dto.fullName.trim(),
             mobileMoneyNumber: dto.mobileMoneyNumber.trim(),
+            whatsappNumber: dto.whatsappNumber.trim(),
             identityNumber: dto.identityNumber.trim(),
             country: dto.country.trim(),
             termsAcceptedAt: new Date(),
@@ -109,6 +110,7 @@ export class AmbassadorsService {
         referralCode: user.referralCode,
         fullName: dto.fullName.trim(),
         mobileMoneyNumber: dto.mobileMoneyNumber.trim(),
+        whatsappNumber: dto.whatsappNumber.trim(),
         identityNumber: dto.identityNumber.trim(),
         country: dto.country.trim(),
         termsAcceptedAt: new Date(),

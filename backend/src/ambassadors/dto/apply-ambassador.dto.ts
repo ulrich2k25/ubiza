@@ -13,6 +13,11 @@ export class ApplyAmbassadorDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(30)
+  whatsappNumber!: string;
+
+  @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
   identityNumber!: string;
 

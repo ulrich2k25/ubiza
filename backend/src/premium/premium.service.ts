@@ -7,7 +7,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 
-const PREMIUM_TRIAL_DURATION_DAYS = 7;
+const PREMIUM_TRIAL_DURATION_DAYS = 3;
 
 @Injectable()
 export class PremiumService {
@@ -23,7 +23,7 @@ export class PremiumService {
   }
 
   /**
-   * Active l’essai Premium gratuit de 7 jours.
+   * Active l’essai Premium gratuit de 3 jours.
    *
    * L’essai ne peut être utilisé qu’une seule fois.
    * Il ne peut pas être activé si un Premium est déjà actif.
@@ -102,7 +102,7 @@ export class PremiumService {
       await transaction.premiumSubscription.create({
         data: {
           userId,
-          plan: 'TRIAL_7_DAYS',
+          plan: 'TRIAL_3_DAYS',
           source: 'TRIAL',
           status: 'ACTIVE',
           startsAt: now,

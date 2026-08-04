@@ -7,15 +7,15 @@ const sections = {
     content: (
       <>
         <p>
-          Ubiza est une plateforme moderne permettant aux créatrices de publier
-          leurs annonces et aux visiteurs de découvrir des profils dans
+          Ubiza est une plateforme moderne permettant aux utilisateurs de
+          publier leurs annonces et aux visiteurs de découvrir des profils dans
           différentes villes du Cameroun.
         </p>
 
         <p>
           Notre objectif est de proposer une expérience simple, discrète et
-          accessible, tout en donnant aux créatrices des outils pour améliorer
-          leur visibilité.
+          accessible, tout en donnant aux utilisateurs des outils pour améliorer
+          la visibilité de leurs profils.
         </p>
 
         <p>

@@ -75,7 +75,11 @@ export default function AdminAmbassadorsPage() {
   }, [selectedStatus]);
 
   useEffect(() => {
-    void loadAmbassadors();
+    const timer = window.setTimeout(() => {
+      void loadAmbassadors();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadAmbassadors]);
 
   const stats = useMemo(() => {
