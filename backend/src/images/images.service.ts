@@ -5,10 +5,11 @@ import {
 } from '@nestjs/common';
 
 import { promises as fs } from 'fs';
-import { basename, extname, join } from 'path';
+import { basename, extname } from 'path';
 import sharp from 'sharp';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { uploadUrlToFilePath } from '../storage/storage-paths';
 import { StorageService } from '../storage/storage.service';
 import { BlurImageDto } from './dto/blur-image.dto';
 import { CreateImageDto } from './dto/create-image.dto';
@@ -387,11 +388,8 @@ export class ImagesService {
   }
 
   private urlToFilePath(imageUrl: string): string {
-    const relativePath = imageUrl.replace(/^[/\\]+/, '');
-
-    return join(process.cwd(), relativePath);
+    return uploadUrlToFilePath(imageUrl);
   }
-
   private async ensureFileExists(
     filePath: string,
     errorMessage: string,

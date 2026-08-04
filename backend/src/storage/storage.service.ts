@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { extname, join } from 'path';
 
+import { getUploadsRoot, uploadUrlToFilePath } from './storage-paths';
 import type { StoredFile } from './types/stored-file.interface';
 
 @Injectable()
@@ -11,7 +12,7 @@ export class StorageService {
     const extension = extname(file.originalname).toLowerCase();
     const filename = `${randomUUID()}${extension}`;
 
-    const uploadDirectory = join(process.cwd(), 'uploads', folder);
+    const uploadDirectory = join(getUploadsRoot(), folder);
     const filePath = join(uploadDirectory, filename);
 
     await fs.mkdir(uploadDirectory, {
@@ -27,8 +28,7 @@ export class StorageService {
   }
 
   async delete(fileUrl: string): Promise<void> {
-    const relativePath = fileUrl.replace(/^[/\\]+/, '');
-    const filePath = join(process.cwd(), relativePath);
+    const filePath = uploadUrlToFilePath(fileUrl);
 
     await fs.unlink(filePath).catch(() => undefined);
   }
