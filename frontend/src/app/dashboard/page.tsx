@@ -22,6 +22,11 @@ export default function DashboardPage() {
 
   const { logout } = useAuth();
 
+  function handleLogout(): void {
+    logout();
+    window.location.replace("/");
+  }
+
   useEffect(() => {
     Promise.all([dashboardService.getDashboard(), boostService.getStatus()])
       .then(([dashboard, boostStatus]) => {
@@ -112,7 +117,7 @@ export default function DashboardPage() {
 
               <button
                 type="button"
-                onClick={logout}
+                onClick={handleLogout}
                 className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-fuchsia-500"
               >
                 Déconnexion

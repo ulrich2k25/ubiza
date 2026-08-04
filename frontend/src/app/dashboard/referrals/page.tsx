@@ -22,17 +22,51 @@ export default function ReferralsPage() {
   const [copiedValue, setCopiedValue] = useState<"code" | "link" | null>(null);
 
   useEffect(() => {
-    Promise.all([referralService.getMine(), ambassadorService.getMine()])
-      .then(([referralDashboard, ambassadorResponse]) => {
-        setData(referralDashboard);
-        setAmbassadorData(ambassadorResponse);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    let isCancelled = false;
+
+    async function loadReferralData(showLoading = true): Promise<void> {
+      if (showLoading) {
+        setLoading(true);
+        setError("");
+      }
+
+      try {
+        const [referralDashboard, ambassadorResponse] = await Promise.all([
+          referralService.getMine(),
+          ambassadorService.getMine(),
+        ]);
+
+        if (!isCancelled) {
+          setData(referralDashboard);
+          setAmbassadorData(ambassadorResponse);
+        }
+      } catch (loadError) {
+        if (showLoading && !isCancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Impossible de charger votre parrainage.",
+          );
+        }
+      } finally {
+        if (showLoading && !isCancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadReferralData();
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadReferralData(false);
+      }
+    }, 10_000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   async function copyValue(
@@ -132,7 +166,7 @@ export default function ReferralsPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <article className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-sm text-zinc-400">Votre code de parrainage</p>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -150,7 +184,7 @@ export default function ReferralsPage() {
             </div>
           </article>
 
-          <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
+          <article className="min-w-0 rounded-3xl border border-white/10 bg-white/[0.04] p-6">
             <p className="text-sm text-zinc-400">Votre lien de partage</p>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
