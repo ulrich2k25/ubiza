@@ -154,6 +154,11 @@ export class AmbassadorsService {
         ambassador: null,
       };
     }
+    const totalReferrals = await this.prisma.user.count({
+      where: {
+        referredById: ambassador.userId,
+      },
+    });
 
     const pendingBalance = ambassador.commissions
       .filter((commission) => commission.status === CommissionStatus.PENDING)
@@ -187,6 +192,12 @@ export class AmbassadorsService {
       hasApplied: true,
       ambassador: {
         ...ambassador,
+
+        _count: {
+          ...ambassador._count,
+          referrals: totalReferrals,
+        },
+
         pendingBalance,
         availableBalance,
         processingBalance,
@@ -527,13 +538,24 @@ export class AmbassadorsService {
 
     const totalEarnings = pendingBalance + availableBalance + paidBalance;
 
-    const totalReferrals = ambassador.referrals.length;
+    const [totalReferrals, publishedListings] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          referredById: ambassador.user.id,
+        },
+      }),
 
-    const publishedListings = ambassador.referrals.filter((referral) =>
-      referral.referredUser.listings.some(
-        (listing) => listing.status === ListingStatus.PUBLISHED,
-      ),
-    ).length;
+      this.prisma.user.count({
+        where: {
+          referredById: ambassador.user.id,
+          listings: {
+            some: {
+              status: ListingStatus.PUBLISHED,
+            },
+          },
+        },
+      }),
+    ]);
 
     const firstPurchases = ambassador.referrals.filter(
       (referral) => referral.firstPurchaseRewardGranted,
