@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { authService } from "@/features/auth/auth.service";
+import { authService as sessionAuthService } from "@/services/auth.service";
 import { listingService } from "@/services/listing.service";
 import { useAuth } from "@/providers/AuthProvider";
 import Link from "next/link";
@@ -40,12 +41,19 @@ function LoginContent() {
         password,
       });
 
+      const currentUser = await sessionAuthService.me();
+
       await refreshAuth();
 
       const returnUrl = searchParams.get("returnUrl");
 
       if (returnUrl?.startsWith("/")) {
         router.replace(returnUrl);
+        return;
+      }
+
+      if (currentUser.role === "ADMIN") {
+        router.replace("/admin");
         return;
       }
 
