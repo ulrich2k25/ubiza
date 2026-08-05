@@ -1,5 +1,12 @@
-﻿import { api } from "@/services/api";
+import { api } from "@/services/api";
 import type { ListingImage } from "@/services/listing-image.service";
+
+export type ListingStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "PAUSED"
+  | "REJECTED"
+  | "DELETED";
 
 export interface CreateListingData {
   title: string;
@@ -24,7 +31,7 @@ export interface Listing {
   title: string;
   description: string;
   age: number;
-  status: string;
+  status: ListingStatus;
   availableNow: boolean;
   cityId: string;
   categoryId: string;
@@ -50,7 +57,10 @@ export const listingService = {
     }
   },
 
-  updateListing(listingId: string, data: UpdateListingData): Promise<Listing> {
+  updateListing(
+    listingId: string,
+    data: UpdateListingData,
+  ): Promise<Listing> {
     return api(`/listings/${listingId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -62,5 +72,22 @@ export const listingService = {
       method: "PATCH",
     });
   },
-};
 
+  pauseListing(listingId: string): Promise<Listing> {
+    return api(`/listings/${listingId}/pause`, {
+      method: "PATCH",
+    });
+  },
+
+  resumeListing(listingId: string): Promise<Listing> {
+    return api(`/listings/${listingId}/resume`, {
+      method: "PATCH",
+    });
+  },
+
+  deleteListing(listingId: string): Promise<Listing> {
+    return api(`/listings/${listingId}`, {
+      method: "DELETE",
+    });
+  },
+};

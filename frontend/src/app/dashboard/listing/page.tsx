@@ -6,15 +6,15 @@ export default function ListingPage() {
       <div className="mx-auto max-w-4xl px-5 py-8 sm:px-8">
         <div className="mb-8">
           <p className="mt-8 text-sm font-medium text-fuchsia-400">
-            Nouvelle annonce
+            Gestion de l’annonce
           </p>
 
           <h1 className="mt-2 text-3xl font-bold tracking-tight">
-            Créer mon annonce
+            Mon annonce
           </h1>
 
           <p className="mt-3 text-sm text-zinc-400">
-            Remplissez les informations principales de votre annonce.
+            Créez, modifiez, mettez en pause ou supprimez votre annonce.
           </p>
         </div>
 
@@ -23,4 +23,3 @@ export default function ListingPage() {
     </main>
   );
 }
-

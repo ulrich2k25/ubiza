@@ -1,4 +1,13 @@
-﻿const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const PUBLIC_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002";
+
+function getApiUrl(): string {
+  if (typeof window === "undefined") {
+    return process.env.API_INTERNAL_URL ?? PUBLIC_API_URL;
+  }
+
+  return PUBLIC_API_URL;
+}
 
 export async function api(endpoint: string, options: RequestInit = {}) {
   const token =
@@ -14,7 +23,7 @@ export async function api(endpoint: string, options: RequestInit = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const response = await fetch(`${getApiUrl()}${endpoint}`, {
     ...options,
     headers,
   });
@@ -27,4 +36,3 @@ export async function api(endpoint: string, options: RequestInit = {}) {
 
   return data;
 }
-

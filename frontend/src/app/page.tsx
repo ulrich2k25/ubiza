@@ -11,6 +11,8 @@ import { storyService } from "@/services/story.service";
 import SiteFooter from "@/components/layout/SiteFooter";
 import AmbassadorFloatingBanner from "@/components/home/AmbassadorFloatingBanner";
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const [creators, stories] = await Promise.all([
     publicProfileService.getPublicProfiles(),

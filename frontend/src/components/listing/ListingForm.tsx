@@ -8,7 +8,10 @@ import ListingDetails from "@/components/listing/ListingDetails";
 import ListingLocation from "@/components/listing/ListingLocation";
 import ImageUploader from "@/components/upload/ImageUploader";
 
-import { listingService } from "@/services/listing.service";
+import {
+  listingService,
+  type ListingStatus,
+} from "@/services/listing.service";
 import {
   listingImageService,
   type ListingImage,
@@ -43,6 +46,7 @@ interface ListingDraft {
 }
 
 type SubmitAction = "save" | "publish";
+type ListingAction = "pause" | "resume" | "delete";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
@@ -185,6 +189,10 @@ export default function ListingForm() {
   const [existingImages, setExistingImages] = useState<ListingImage[]>([]);
 
   const [listingId, setListingId] = useState<string | null>(null);
+  const [listingStatus, setListingStatus] =
+    useState<ListingStatus | null>(null);
+  const [listingAction, setListingAction] =
+    useState<ListingAction | null>(null);
 
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [loadingListing, setLoadingListing] = useState(true);
@@ -241,6 +249,7 @@ export default function ListingForm() {
     async function loadListing() {
       if (!isAuthenticated) {
         setListingId(null);
+        setListingStatus(null);
         setLoadingListing(false);
         return;
       }
@@ -250,10 +259,12 @@ export default function ListingForm() {
 
         if (!listing) {
           setListingId(null);
+          setListingStatus(null);
           return;
         }
 
         setListingId(listing.id);
+        setListingStatus(listing.status);
         setTitle(listing.title);
         setDescription(listing.description);
         setAge(listing.age.toString());
@@ -263,6 +274,7 @@ export default function ListingForm() {
         setExistingImages(listing.images ?? []);
       } catch {
         setListingId(null);
+        setListingStatus(null);
       } finally {
         setLoadingListing(false);
       }
@@ -448,6 +460,7 @@ export default function ListingForm() {
 
         if (action === "publish" && currentListingId) {
           await listingService.publishListing(currentListingId);
+          setListingStatus("PUBLISHED");
 
           await clearTemporaryDraft();
 
@@ -565,6 +578,99 @@ export default function ListingForm() {
     }
   }
 
+  async function handlePauseListing() {
+    if (!listingId) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setListingAction("pause");
+
+    try {
+      const listing = await listingService.pauseListing(listingId);
+
+      setListingStatus(listing.status);
+      setSuccess("Votre annonce est maintenant en pause.");
+
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de mettre l’annonce en pause.",
+      );
+    } finally {
+      setListingAction(null);
+    }
+  }
+
+  async function handleResumeListing() {
+    if (!listingId) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setListingAction("resume");
+
+    try {
+      const listing = await listingService.resumeListing(listingId);
+
+      setListingStatus(listing.status);
+      setSuccess("Votre annonce est de nouveau visible.");
+
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de remettre l’annonce en ligne.",
+      );
+    } finally {
+      setListingAction(null);
+    }
+  }
+
+  async function handleDeleteListing() {
+    if (!listingId) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Supprimer définitivement cette annonce de votre espace ? " +
+        "Elle ne sera plus visible publiquement.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setListingAction("delete");
+
+    try {
+      await listingService.deleteListing(listingId);
+      await clearTemporaryDraft();
+
+      setListingId(null);
+      setListingStatus(null);
+      setExistingImages([]);
+      setImages([]);
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de supprimer l’annonce.",
+      );
+      setListingAction(null);
+    }
+  }
+
   function handleCancel() {
     if (listingId) {
       router.push("/dashboard");
@@ -601,6 +707,75 @@ export default function ListingForm() {
         >
           ← Retour au dashboard
         </Link>
+      ) : null}
+
+      {listingId ? (
+        <section className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">
+                Statut de l’annonce
+              </p>
+
+              <p className="mt-1 text-sm text-zinc-400">
+                {listingStatus === "PUBLISHED"
+                  ? "Votre annonce est visible publiquement."
+                  : listingStatus === "PAUSED"
+                    ? "Votre annonce est actuellement masquée."
+                    : "Votre annonce n’est pas encore publiée."}
+              </p>
+            </div>
+
+            <span className="w-fit rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-semibold text-zinc-200">
+              {listingStatus === "PUBLISHED"
+                ? "Publiée"
+                : listingStatus === "PAUSED"
+                  ? "En pause"
+                  : listingStatus === "DRAFT"
+                    ? "Brouillon"
+                    : listingStatus ?? "Inconnu"}
+            </span>
+          </div>
+
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            {listingStatus === "PUBLISHED" ? (
+              <button
+                type="button"
+                onClick={handlePauseListing}
+                disabled={submitting || listingAction !== null}
+                className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {listingAction === "pause"
+                  ? "Mise en pause..."
+                  : "Mettre en pause"}
+              </button>
+            ) : null}
+
+            {listingStatus === "PAUSED" ? (
+              <button
+                type="button"
+                onClick={handleResumeListing}
+                disabled={submitting || listingAction !== null}
+                className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {listingAction === "resume"
+                  ? "Remise en ligne..."
+                  : "Remettre en ligne"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleDeleteListing}
+              disabled={submitting || listingAction !== null}
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-semibold text-red-300 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto"
+            >
+              {listingAction === "delete"
+                ? "Suppression..."
+                : "Supprimer l’annonce"}
+            </button>
+          </div>
+        </section>
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -688,7 +863,7 @@ export default function ListingForm() {
           <button
             type="button"
             onClick={handleCancel}
-            disabled={submitting}
+            disabled={submitting || listingAction !== null}
             className="
             rounded-xl
             border
@@ -709,7 +884,7 @@ export default function ListingForm() {
               type="submit"
               name="action"
               value="save"
-              disabled={submitting}
+              disabled={submitting || listingAction !== null}
               className="
               rounded-xl
               border
@@ -727,11 +902,14 @@ export default function ListingForm() {
             </button>
           ) : null}
 
+          {!isAuthenticated ||
+          !listingId ||
+          listingStatus === "DRAFT" ? (
           <button
             type="submit"
             name="action"
             value="publish"
-            disabled={submitting}
+            disabled={submitting || listingAction !== null}
             className="
             rounded-xl
             bg-gradient-to-r
@@ -751,6 +929,7 @@ export default function ListingForm() {
                 ? "Publier l’annonce"
                 : "Continuer et publier"}
           </button>
+          ) : null}
         </div>
       </form>
     </>
