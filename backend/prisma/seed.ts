@@ -11,6 +11,23 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
+  await prisma.currency.upsert({
+    where: {
+      code: 'XAF',
+    },
+    update: {
+      name: 'Franc CFA',
+      symbol: 'FCFA',
+      isActive: true,
+    },
+    create: {
+      name: 'Franc CFA',
+      code: 'XAF',
+      symbol: 'FCFA',
+      isActive: true,
+    },
+  });
+
   const categories = [
     {
       name: 'Escortes',
