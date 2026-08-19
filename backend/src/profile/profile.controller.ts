@@ -86,7 +86,6 @@ export class ProfileController {
    * Exemple :
    * GET /profiles/bella237/contact
    */
-  @UseGuards(JwtAuthGuard)
   @Get(':username/contact')
   findProfileContact(@Param('username') username: string) {
     return this.profileService.findProfileContact(username);

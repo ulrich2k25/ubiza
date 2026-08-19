@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-import { useAuth } from "@/providers/AuthProvider";
 import {
   getProfileContact,
   type ProfileContact,
@@ -18,102 +16,48 @@ export default function PublicProfileContact({
   username,
   displayName,
 }: PublicProfileContactProps) {
-  const router = useRouter();
-  const { isAuthenticated, isAuthReady } = useAuth();
-
   const [contact, setContact] = useState<ProfileContact | null>(null);
+  const [showContact, setShowContact] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const profileName = displayName || username;
 
-  useEffect(() => {
-    if (!isAuthReady || !isAuthenticated) {
-      const timer = window.setTimeout(() => {
-        setContact(null);
-        setError(null);
-        setIsLoading(false);
-      }, 0);
+  async function handleContact() {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-      return () => window.clearTimeout(timer);
+      const data = await getProfileContact(username);
+
+      setContact(data);
+      setShowContact(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible de charger les coordonnées.",
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    let isCancelled = false;
-
-    async function loadContact() {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const data = await getProfileContact(username);
-
-        if (!isCancelled) {
-          setContact(data);
-        }
-      } catch (err) {
-        if (!isCancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Impossible de charger les coordonnées.",
-          );
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void loadContact();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isAuthReady, isAuthenticated, username]);
-
-  function handleContact() {
-    const returnUrl = `/${username}`;
-
-    router.push(`/register?returnUrl=${encodeURIComponent(returnUrl)}`);
   }
 
-  if (!isAuthReady) {
-    return (
-      <section className="rounded-3xl border border-white/10 bg-zinc-950 p-6 sm:p-8">
-        <div className="h-12 animate-pulse rounded-xl bg-white/5" />
-      </section>
-    );
-  }
-
-  if (!isAuthenticated) {
+  if (!showContact) {
     return (
       <section className="rounded-3xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/10 via-zinc-950 to-black p-6 sm:p-8">
         <div className="flex justify-center">
           <button
             type="button"
             onClick={handleContact}
-            className="w-full rounded-xl bg-fuchsia-600 px-8 py-3 font-semibold text-white transition hover:bg-fuchsia-500 sm:w-auto"
+            disabled={isLoading}
+            className="w-full rounded-xl bg-fuchsia-600 px-8 py-3 font-semibold text-white transition hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            Contacter
+            {isLoading ? "Chargement..." : "Contacter"}
           </button>
+
+          {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
         </div>
-      </section>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <section className="rounded-3xl border border-white/10 bg-zinc-950 p-6 sm:p-8">
-        <div className="h-24 animate-pulse rounded-2xl bg-white/5" />
-      </section>
-    );
-  }
-
-  if (error) {
-    return (
-      <section className="rounded-3xl border border-red-500/20 bg-red-500/5 p-6 sm:p-8">
-        <p className="text-sm text-red-300">{error}</p>
       </section>
     );
   }
@@ -187,4 +131,3 @@ export default function PublicProfileContact({
     </section>
   );
 }
-
