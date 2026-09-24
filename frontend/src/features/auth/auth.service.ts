@@ -1,15 +1,13 @@
 ﻿import { api } from "@/services/api";
 
 export interface LoginData {
-  email: string;
+  identifier: string;
   password: string;
 }
 
 export interface RegisterData {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
   username: string;
   referralCode?: string;
 }

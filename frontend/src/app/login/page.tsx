@@ -1,13 +1,13 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { authService } from "@/features/auth/auth.service";
 import { authService as sessionAuthService } from "@/services/auth.service";
 import { listingService } from "@/services/listing.service";
 import { useAuth } from "@/providers/AuthProvider";
-import Link from "next/link";
 
 export default function LoginPage() {
   return (
@@ -23,8 +23,9 @@ function LoginContent() {
 
   const { refreshAuth } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +38,7 @@ function LoginContent() {
       setIsSubmitting(true);
 
       await authService.login({
-        email,
+        identifier: identifier.trim(),
         password,
       });
 
@@ -47,7 +48,11 @@ function LoginContent() {
 
       const returnUrl = searchParams.get("returnUrl");
 
-      if (returnUrl?.startsWith("/")) {
+      if (
+        returnUrl &&
+        returnUrl.startsWith("/") &&
+        !returnUrl.startsWith("//")
+      ) {
         router.replace(returnUrl);
         return;
       }
@@ -165,19 +170,22 @@ function LoginContent() {
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="email" className="mb-2 block text-sm text-zinc-300">
-              Email
+            <label
+              htmlFor="identifier"
+              className="mb-2 block text-sm text-zinc-300"
+            >
+              Email ou pseudo
             </label>
 
             <input
-              id="email"
-              type="email"
-              placeholder="exemple@email.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              id="identifier"
+              type="text"
+              placeholder="Email ou pseudo"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               required
               disabled={isSubmitting}
-              autoComplete="email"
+              autoComplete="username"
               className="
                 w-full
                 rounded-2xl
@@ -205,38 +213,73 @@ function LoginContent() {
 
               <Link
                 href="/forgot-password"
-                className="text-sm font-semibold text-fuchsia-400 transition hover:text-fuchsia-300"
+                className="
+                  text-sm
+                  font-semibold
+                  text-fuchsia-400
+                  transition
+                  hover:text-fuchsia-300
+                "
               >
                 Mot de passe oublié ?
               </Link>
             </div>
 
-            <input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              disabled={isSubmitting}
-              autoComplete="current-password"
-              className="
-      w-full
-      rounded-2xl
-      border
-      border-white/10
-      bg-black/40
-      px-5
-      py-4
-      text-white
-      outline-none
-      placeholder:text-zinc-600
-      transition
-      focus:border-fuchsia-500
-      disabled:cursor-not-allowed
-      disabled:opacity-60
-    "
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                disabled={isSubmitting}
+                autoComplete="current-password"
+                className="
+                  w-full
+                  rounded-2xl
+                  border
+                  border-white/10
+                  bg-black/40
+                  px-5
+                  py-4
+                  pr-20
+                  text-white
+                  outline-none
+                  placeholder:text-zinc-600
+                  transition
+                  focus:border-fuchsia-500
+                  disabled:cursor-not-allowed
+                  disabled:opacity-60
+                "
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                disabled={isSubmitting}
+                aria-label={
+                  showPassword
+                    ? "Masquer le mot de passe"
+                    : "Afficher le mot de passe"
+                }
+                className="
+                  absolute
+                  right-4
+                  top-1/2
+                  -translate-y-1/2
+                  text-sm
+                  font-medium
+                  text-zinc-400
+                  transition
+                  hover:text-white
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                "
+              >
+                {showPassword ? "Masquer" : "Voir"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -270,6 +313,7 @@ function LoginContent() {
               ml-2
               font-semibold
               text-fuchsia-400
+              transition
               hover:text-fuchsia-300
             "
           >

@@ -11,12 +11,14 @@ export default function RegisterPage() {
   const { refreshAuth } = useAuth();
 
   const [username, setUsername] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const [showPassword, setShowPassword] = useState(false);
+
   const [referralCode, setReferralCode] = useState("");
+  const [showReferralInput, setShowReferralInput] = useState(false);
+  const [referralFromUrl, setReferralFromUrl] = useState(false);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,8 +31,15 @@ export default function RegisterPage() {
       return;
     }
 
+    const normalizedReferralCode = referralCodeFromUrl.trim().toUpperCase();
+
+    if (!normalizedReferralCode) {
+      return;
+    }
+
     const timer = window.setTimeout(() => {
-      setReferralCode(referralCodeFromUrl.trim().toUpperCase());
+      setReferralCode(normalizedReferralCode);
+      setReferralFromUrl(true);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -38,7 +47,8 @@ export default function RegisterPage() {
 
   function getSafeNextPath() {
     const params = new URLSearchParams(window.location.search);
-    const next = params.get("next");
+
+    const next = params.get("next") ?? params.get("returnUrl");
 
     if (next && next.startsWith("/") && !next.startsWith("//")) {
       return next;
@@ -54,13 +64,13 @@ export default function RegisterPage() {
       setError("");
       setLoading(true);
 
+      const normalizedUsername = username.trim();
+      const normalizedEmail = email.trim().toLowerCase();
       const normalizedReferralCode = referralCode.trim().toUpperCase();
 
       await authService.register({
-        username: username.trim(),
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: email.trim(),
+        username: normalizedUsername,
+        email: normalizedEmail,
         password,
         ...(normalizedReferralCode
           ? { referralCode: normalizedReferralCode }
@@ -68,7 +78,7 @@ export default function RegisterPage() {
       });
 
       await authService.login({
-        email: email.trim(),
+        identifier: normalizedEmail,
         password,
       });
 
@@ -85,6 +95,12 @@ export default function RegisterPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleLoginRedirect() {
+    const next = getSafeNextPath();
+
+    router.push(`/login?returnUrl=${encodeURIComponent(next)}`);
   }
 
   return (
@@ -133,7 +149,7 @@ export default function RegisterPage() {
         "
       >
         <div className="text-center">
-          <h1 className="text-4xl font-black">
+          <h1 className="text-4xl font-black tracking-tight">
             <span className="text-white">Ubi</span>
             <span className="text-fuchsia-500">za</span>
           </h1>
@@ -141,14 +157,14 @@ export default function RegisterPage() {
           <h2 className="mt-5 text-2xl font-bold">Créer ton compte 🚀</h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            Rejoins Ubiza et finalise ton expérience.
+            Ça prend moins de 30 secondes.
           </p>
         </div>
 
         {error ? (
           <div
             className="
-              rounded-xl
+              rounded-2xl
               border
               border-red-500/20
               bg-red-500/10
@@ -162,74 +178,164 @@ export default function RegisterPage() {
           </div>
         ) : null}
 
-        <input
-          type="text"
-          placeholder="Pseudo Ubiza"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          className="input-style"
-          autoComplete="username"
-          required
-        />
+        <div>
+          <label
+            htmlFor="username"
+            className="mb-2 block text-sm text-zinc-300"
+          >
+            Pseudo
+          </label>
 
-        <input
-          type="text"
-          placeholder="Prénom"
-          value={firstName}
-          onChange={(event) => setFirstName(event.target.value)}
-          className="input-style"
-          autoComplete="given-name"
-          required
-        />
-
-        <input
-          type="text"
-          placeholder="Nom"
-          value={lastName}
-          onChange={(event) => setLastName(event.target.value)}
-          className="input-style"
-          autoComplete="family-name"
-          required
-        />
-
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          className="input-style"
-          autoComplete="email"
-          required
-        />
-
-        <input
-          type="password"
-          placeholder="Mot de passe"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="input-style"
-          autoComplete="new-password"
-          minLength={8}
-          required
-        />
+          <input
+            id="username"
+            type="text"
+            placeholder="ex. alex237"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            disabled={loading}
+            autoComplete="username"
+            className="input-style"
+            required
+          />
+        </div>
 
         <div>
-          <input
-            type="text"
-            placeholder="Code de parrainage (facultatif)"
-            value={referralCode}
-            onChange={(event) =>
-              setReferralCode(event.target.value.toUpperCase())
-            }
-            className="input-style"
-            autoComplete="off"
-          />
+          <label htmlFor="email" className="mb-2 block text-sm text-zinc-300">
+            Email
+          </label>
 
-          {referralCode ? (
-            <p className="mt-2 text-xs text-fuchsia-300">
-              Code de parrainage détecté : {referralCode}
-            </p>
-          ) : null}
+          <input
+            id="email"
+            type="email"
+            placeholder="exemple@email.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={loading}
+            autoComplete="email"
+            className="input-style"
+            required
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="password"
+            className="mb-2 block text-sm text-zinc-300"
+          >
+            Mot de passe
+          </label>
+
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Au moins 8 caractères"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              disabled={loading}
+              autoComplete="new-password"
+              minLength={8}
+              className="
+                input-style
+                pr-20
+              "
+              required
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              disabled={loading}
+              className="
+                absolute
+                right-4
+                top-1/2
+                -translate-y-1/2
+                text-sm
+                font-medium
+                text-zinc-400
+                transition
+                hover:text-white
+                disabled:opacity-50
+              "
+              aria-label={
+                showPassword
+                  ? "Masquer le mot de passe"
+                  : "Afficher le mot de passe"
+              }
+            >
+              {showPassword ? "Masquer" : "Voir"}
+            </button>
+          </div>
+
+          <p className="mt-2 text-xs text-zinc-500">Minimum 8 caractères.</p>
+        </div>
+
+        <div>
+          {referralFromUrl && referralCode ? (
+            <div
+              className="
+                rounded-2xl
+                border
+                border-fuchsia-500/20
+                bg-fuchsia-500/10
+                px-4
+                py-3
+              "
+            >
+              <p className="text-sm text-fuchsia-200">
+                Code de parrainage appliqué
+              </p>
+
+              <p className="mt-1 font-semibold text-white">{referralCode}</p>
+            </div>
+          ) : showReferralInput ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                placeholder="Code de parrainage"
+                value={referralCode}
+                onChange={(event) =>
+                  setReferralCode(event.target.value.toUpperCase())
+                }
+                disabled={loading}
+                autoComplete="off"
+                className="input-style"
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setReferralCode("");
+                  setShowReferralInput(false);
+                }}
+                disabled={loading}
+                className="
+                  text-sm
+                  text-zinc-400
+                  transition
+                  hover:text-white
+                "
+              >
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowReferralInput(true)}
+              disabled={loading}
+              className="
+                text-sm
+                font-medium
+                text-fuchsia-400
+                transition
+                hover:text-fuchsia-300
+              "
+            >
+              Tu as un code de parrainage ?
+            </button>
+          )}
         </div>
 
         <button
@@ -241,8 +347,11 @@ export default function RegisterPage() {
             bg-fuchsia-600
             py-4
             font-bold
+            text-white
             transition
             hover:bg-fuchsia-500
+            hover:shadow-lg
+            hover:shadow-fuchsia-500/20
             disabled:cursor-not-allowed
             disabled:opacity-50
           "
@@ -251,19 +360,18 @@ export default function RegisterPage() {
         </button>
 
         <p className="text-center text-sm text-zinc-400">
-          Déjà inscrit ?
+          Déjà un compte ?
           <button
             type="button"
-            onClick={() => {
-              const next = getSafeNextPath();
-              router.push(`/login?next=${encodeURIComponent(next)}`);
-            }}
+            onClick={handleLoginRedirect}
+            disabled={loading}
             className="
               ml-2
               font-semibold
               text-fuchsia-400
               transition
               hover:text-fuchsia-300
+              disabled:opacity-50
             "
           >
             Se connecter
@@ -273,4 +381,3 @@ export default function RegisterPage() {
     </main>
   );
 }
-
