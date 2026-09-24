@@ -84,7 +84,7 @@ export default function RegisterPage() {
 
       await refreshAuth();
 
-      router.replace(getSafeNextPath());
+      router.replace("/");
       router.refresh();
     } catch (err) {
       setError(

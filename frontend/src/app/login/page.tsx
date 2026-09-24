@@ -48,17 +48,18 @@ function LoginContent() {
 
       const returnUrl = searchParams.get("returnUrl");
 
-      if (
-        returnUrl &&
-        returnUrl.startsWith("/") &&
-        !returnUrl.startsWith("//")
-      ) {
-        router.replace(returnUrl);
+      const safeReturnUrl =
+        returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//")
+          ? returnUrl
+          : null;
+
+      if (currentUser.role === "ADMIN") {
+        router.replace(safeReturnUrl ?? "/admin");
         return;
       }
 
-      if (currentUser.role === "ADMIN") {
-        router.replace("/admin");
+      if (safeReturnUrl && !safeReturnUrl.startsWith("/admin")) {
+        router.replace(safeReturnUrl);
         return;
       }
 
