@@ -18,14 +18,6 @@ export class RegisterDto {
   @MinLength(8)
   password!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  firstName!: string;
-
-  @IsString()
-  @IsNotEmpty()
-  lastName!: string;
-
   @IsOptional()
   @IsString()
   referralCode?: string;

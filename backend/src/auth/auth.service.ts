@@ -219,8 +219,7 @@ export class AuthService {
 
     const emailVerificationToken = this.generateEmailVerificationToken();
 
-    const displayName = `${dto.firstName.trim()} ${dto.lastName.trim()}`;
-
+    const displayName = dto.username.trim();
     let user: RegisteredUser;
 
     try {
@@ -420,11 +419,22 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const normalizedEmail = dto.email.trim().toLowerCase();
+    const normalizedIdentifier = dto.identifier.trim().toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        OR: [
+          {
+            email: normalizedIdentifier,
+          },
+          {
+            profile: {
+              is: {
+                username: normalizedIdentifier,
+              },
+            },
+          },
+        ],
       },
       include: {
         profile: true,
@@ -432,7 +442,9 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Email ou mot de passe incorrect.');
+      throw new UnauthorizedException(
+        'Email, pseudo ou mot de passe incorrect.',
+      );
     }
 
     const passwordIsValid = await bcrypt.compare(
@@ -441,7 +453,9 @@ export class AuthService {
     );
 
     if (!passwordIsValid) {
-      throw new UnauthorizedException('Email ou mot de passe incorrect.');
+      throw new UnauthorizedException(
+        'Email, pseudo ou mot de passe incorrect.',
+      );
     }
 
     await this.prisma.user.update({
