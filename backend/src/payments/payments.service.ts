@@ -21,11 +21,9 @@ import {
 import { PaymentPricingService } from './payment-pricing.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { CamPayService } from './campay/campay.service';
-import type {
-  CamPayCollectResponse,
-  CamPayWebhookPayload,
-} from './campay/campay.types';
+import type { CamPayWebhookPayload } from './campay/campay.types';
 import { SubmitManualPaymentDto } from './dto/submit-manual-payment.dto';
+import { PaymentPlatformService } from './payment-platform/payment-platform.service';
 
 const PAYMENT_EXPIRATION_MINUTES = 30;
 const MANUAL_PAYMENT_EXPIRATION_HOURS = 24;
@@ -42,6 +40,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
     private readonly referralsService: ReferralsService,
     private readonly camPayService: CamPayService,
+    private readonly paymentPlatformService: PaymentPlatformService,
     private readonly telegramService: TelegramService,
   ) {}
 
@@ -132,7 +131,7 @@ export class PaymentsService {
         data: {
           userId,
           currencyId: currency.id,
-          provider: 'CAMPAY',
+          provider: 'PAYMENT_PLATFORM',
           purpose: dto.purpose,
           status: 'PENDING',
           amount: price.amount,
@@ -171,17 +170,13 @@ export class PaymentsService {
       );
     }
 
-    if (!dto.customerPhone?.trim()) {
-      throw new BadRequestException('Le numéro Mobile Money est obligatoire.');
-    }
-    let camPayResponse: CamPayCollectResponse;
+    let platformPayment;
 
     try {
-      camPayResponse = await this.camPayService.collect({
+      platformPayment = await this.paymentPlatformService.createPayment({
         amount: price.amount,
-        phoneNumber: dto.customerPhone.trim(),
-        description: price.description,
-        externalReference: payment.externalReference,
+        reference: payment.externalReference,
+        idempotencyKey: payment.id,
       });
     } catch (error) {
       await this.prisma.payment.update({
@@ -194,7 +189,7 @@ export class PaymentsService {
           failureReason:
             error instanceof Error
               ? error.message
-              : "CamPay n'a pas pu initialiser le paiement.",
+              : "La plateforme de paiement n'a pas pu initialiser le paiement.",
         },
       });
 
@@ -206,12 +201,19 @@ export class PaymentsService {
         id: payment.id,
       },
       data: {
-        providerTransactionId: camPayResponse.reference,
+        providerTransactionId: platformPayment.id,
         providerData: {
           description: price.description,
           premiumPlan: price.premiumPlan ?? null,
           boostDurationMinutes: price.durationMinutes ?? null,
-          campay: camPayResponse as unknown as Prisma.InputJsonValue,
+
+          paymentPlatform: {
+            paymentId: platformPayment.id,
+            provider: platformPayment.provider,
+            providerReference: platformPayment.providerReference,
+            checkoutUrl: platformPayment.checkoutUrl,
+            status: platformPayment.status,
+          },
         },
       },
       select: {
@@ -233,22 +235,17 @@ export class PaymentsService {
         },
       },
     });
+
     return {
       message:
-        camPayResponse.message ??
-        'Paiement Mobile Money initialisé. Validez la demande sur votre téléphone.',
+        'Paiement initialisé. Vous allez être redirigé vers le paiement sécurisé.',
 
       payment: {
         ...updatedPayment,
         amount: updatedPayment.amount.toString(),
       },
 
-      campay: {
-        reference: camPayResponse.reference,
-        status: camPayResponse.status,
-        operator: camPayResponse.operator ?? null,
-        ussdCode: camPayResponse.ussd_code ?? null,
-      },
+      checkoutUrl: platformPayment.checkoutUrl,
     };
   }
 
@@ -696,6 +693,277 @@ export class PaymentsService {
           : 'Paiement confirmé et Boost activé.',
 
       ...result,
+    };
+  }
+  async handlePaymentPlatformCompleted(input: {
+    webhookId: string;
+    paymentPlatformId: string;
+    reference: string;
+    amount: number;
+    currency: string;
+  }) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        provider: 'PAYMENT_PLATFORM',
+        providerTransactionId: input.paymentPlatformId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        currencyId: true,
+        provider: true,
+        purpose: true,
+        status: true,
+        amount: true,
+        externalReference: true,
+        providerTransactionId: true,
+        providerData: true,
+        paidAt: true,
+
+        currency: {
+          select: {
+            code: true,
+          },
+        },
+
+        user: {
+          select: {
+            id: true,
+            deletedAt: true,
+            listings: {
+              where: {
+                deletedAt: null,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 1,
+              select: {
+                id: true,
+                status: true,
+                boostActiveUntil: true,
+              },
+            },
+          },
+        },
+
+        premiumSubscription: {
+          select: {
+            id: true,
+            plan: true,
+            source: true,
+            status: true,
+            amount: true,
+            startsAt: true,
+            endsAt: true,
+          },
+        },
+
+        boost: {
+          select: {
+            id: true,
+            source: true,
+            status: true,
+            durationMinutes: true,
+            amount: true,
+            startsAt: true,
+            endsAt: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(
+        'Aucun paiement Ubiza ne correspond à ce paiement Payment Platform.',
+      );
+    }
+
+    if (!payment.user || payment.user.deletedAt) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+
+    if (payment.externalReference !== input.reference) {
+      throw new BadRequestException(
+        'La référence du paiement ne correspond pas.',
+      );
+    }
+
+    if (payment.currency.code !== input.currency) {
+      throw new BadRequestException('La devise du paiement ne correspond pas.');
+    }
+
+    if (Number(payment.amount.toString()) !== input.amount) {
+      throw new BadRequestException(
+        'Le montant du paiement ne correspond pas.',
+      );
+    }
+
+    if (payment.status === 'SUCCESS') {
+      return {
+        received: true,
+        alreadyConfirmed: true,
+        webhookId: input.webhookId,
+        paymentId: payment.id,
+        status: payment.status,
+      };
+    }
+
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (transaction) => {
+      const currentPayment = await transaction.payment.findUnique({
+        where: {
+          id: payment.id,
+        },
+        select: {
+          id: true,
+          userId: true,
+          currencyId: true,
+          provider: true,
+          purpose: true,
+          status: true,
+          amount: true,
+          providerData: true,
+
+          user: {
+            select: {
+              id: true,
+              deletedAt: true,
+              listings: {
+                where: {
+                  deletedAt: null,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                take: 1,
+                select: {
+                  id: true,
+                  status: true,
+                  boostActiveUntil: true,
+                },
+              },
+            },
+          },
+
+          premiumSubscription: {
+            select: {
+              id: true,
+            },
+          },
+
+          boost: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!currentPayment) {
+        throw new NotFoundException('Paiement introuvable.');
+      }
+
+      if (!currentPayment.user || currentPayment.user.deletedAt) {
+        throw new NotFoundException('Utilisateur introuvable.');
+      }
+
+      if (currentPayment.status === 'SUCCESS') {
+        return {
+          alreadyConfirmed: true,
+          purpose: currentPayment.purpose,
+        };
+      }
+
+      const reservation = await transaction.payment.updateMany({
+        where: {
+          id: currentPayment.id,
+          provider: 'PAYMENT_PLATFORM',
+          status: {
+            in: ['PENDING', 'PROCESSING'],
+          },
+        },
+        data: {
+          status: 'SUCCESS',
+          paidAt: now,
+          failedAt: null,
+          cancelledAt: null,
+          failureReason: null,
+        },
+      });
+
+      if (reservation.count === 0) {
+        throw new BadRequestException(
+          'Ce paiement est déjà traité ou ne peut plus être confirmé.',
+        );
+      }
+
+      if (currentPayment.purpose === 'PREMIUM') {
+        await this.activatePremiumPurchase(
+          transaction,
+          {
+            id: currentPayment.id,
+            userId: currentPayment.userId,
+            currencyId: currentPayment.currencyId,
+            amount: currentPayment.amount,
+            providerData: currentPayment.providerData,
+          },
+          now,
+        );
+
+        await this.referralsService.handleFirstSuccessfulPurchase(transaction, {
+          id: currentPayment.id,
+          userId: currentPayment.userId,
+          currencyId: currentPayment.currencyId,
+          amount: currentPayment.amount,
+        });
+
+        return {
+          alreadyConfirmed: false,
+          purpose: currentPayment.purpose,
+        };
+      }
+
+      if (currentPayment.purpose === 'BOOST') {
+        await this.activateBoostPurchase(
+          transaction,
+          {
+            id: currentPayment.id,
+            userId: currentPayment.userId,
+            currencyId: currentPayment.currencyId,
+            amount: currentPayment.amount,
+            providerData: currentPayment.providerData,
+            user: {
+              listings: currentPayment.user.listings,
+            },
+          },
+          now,
+        );
+
+        await this.referralsService.handleFirstSuccessfulPurchase(transaction, {
+          id: currentPayment.id,
+          userId: currentPayment.userId,
+          currencyId: currentPayment.currencyId,
+          amount: currentPayment.amount,
+        });
+
+        return {
+          alreadyConfirmed: false,
+          purpose: currentPayment.purpose,
+        };
+      }
+
+      throw new BadRequestException('La destination du paiement est invalide.');
+    });
+
+    return {
+      received: true,
+      alreadyConfirmed: result.alreadyConfirmed,
+      webhookId: input.webhookId,
+      paymentId: payment.id,
+      status: 'SUCCESS',
+      product: result.purpose,
     };
   }
   async handleCamPayWebhook(payload: CamPayWebhookPayload) {

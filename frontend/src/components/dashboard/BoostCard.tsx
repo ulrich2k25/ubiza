@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ManualPaymentForm from "@/components/payments/ManualPaymentForm";
 import { useSearchParams } from "next/navigation";
 import { boostService, type BoostStatus } from "@/services/boost.service";
 import {
   paymentsService,
-  type Payment,
   type PricingResponse,
 } from "@/services/payments.service";
 
@@ -19,13 +17,13 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
   const [remaining, setRemaining] = useState("");
 
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
-  const [payment, setPayment] = useState<Payment | null>(null);
 
   const [showPurchase, setShowPurchase] = useState(false);
   const searchParams = useSearchParams();
 
   const [loadingPricing, setLoadingPricing] = useState(true);
   const [activatingCredit, setActivatingCredit] = useState(false);
+  const [startingPayment, setStartingPayment] = useState(false);
   const [refreshingAfterExpiry, setRefreshingAfterExpiry] = useState(false);
 
   const [error, setError] = useState("");
@@ -46,83 +44,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
         setLoadingPricing(false);
       });
   }, []);
-
-  useEffect(() => {
-    if (
-      !payment ||
-      payment.provider === "MANUAL" ||
-      payment.status === "SUCCESS" ||
-      payment.status === "FAILED" ||
-      payment.status === "CANCELLED" ||
-      payment.status === "EXPIRED"
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const intervalId = window.setInterval(async () => {
-      try {
-        const refreshedPayment = await paymentsService.getOne(payment.id);
-
-        if (cancelled) {
-          return;
-        }
-
-        setPayment(refreshedPayment);
-
-        if (refreshedPayment.status === "SUCCESS") {
-          window.clearInterval(intervalId);
-
-          const status = await boostService.getStatus();
-
-          if (!cancelled) {
-            onUpdated(status);
-            setShowPurchase(false);
-
-            setSuccess(
-              "Paiement confirmé. Votre annonce est maintenant boostée.",
-            );
-            setError("");
-          }
-        }
-
-        if (refreshedPayment.status === "FAILED") {
-          window.clearInterval(intervalId);
-
-          setError(
-            refreshedPayment.failureReason ||
-              "Le paiement Mobile Money a échoué.",
-          );
-
-          setSuccess("");
-        }
-
-        if (refreshedPayment.status === "CANCELLED") {
-          window.clearInterval(intervalId);
-
-          setError("Le paiement a été annulé.");
-
-          setSuccess("");
-        }
-
-        if (refreshedPayment.status === "EXPIRED") {
-          window.clearInterval(intervalId);
-
-          setError("La demande de paiement a expiré.");
-
-          setSuccess("");
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [payment, onUpdated]);
 
   useEffect(() => {
     const shouldOpen = searchParams.get("openBoost") === "1";
@@ -243,8 +164,38 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
       setActivatingCredit(false);
     }
   }
+  async function startPaidBoost() {
+    if (!boostOffer) {
+      setError("Le tarif du Boost est indisponible.");
+      return;
+    }
 
-  const isBusy = activatingCredit;
+    try {
+      setStartingPayment(true);
+      setError("");
+      setSuccess("");
+
+      const response = await paymentsService.createBoost("MINUTES_60");
+
+      const checkoutUrl = response.checkoutUrl?.trim();
+
+      if (!checkoutUrl) {
+        throw new Error("Impossible d'obtenir la page de paiement sécurisée.");
+      }
+
+      window.location.assign(checkoutUrl);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser le paiement.",
+      );
+    } finally {
+      setStartingPayment(false);
+    }
+  }
+
+  const isBusy = activatingCredit || startingPayment;
   return (
     <article
       id="boost"
@@ -371,20 +322,18 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
                 </p>
               </div>
 
-              {!payment && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPurchase(false);
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPurchase(false);
 
-                    setError("");
-                    setSuccess("");
-                  }}
-                  className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
-                >
-                  Fermer
-                </button>
-              )}
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
+              >
+                Fermer
+              </button>
             </div>
 
             {boostOffer && (
@@ -405,98 +354,22 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
               </div>
             )}
 
-            {!payment && boostOffer && (
-              <ManualPaymentForm
-                purpose="BOOST"
-                boostDuration="MINUTES_60"
-                amount={boostOffer.amount}
-                disabled={activatingCredit}
-                onSubmitted={(submittedPayment, message) => {
-                  setPayment(submittedPayment);
-                  setSuccess(
-                    message ||
-                      "Votre paiement a été envoyé pour vérification. Votre Boost sera activé au plus tard sous 24 heures.",
-                  );
-                  setError("");
-                }}
-              />
-            )}
-            {payment && (
-              <div className="mt-5 rounded-xl border border-white/10 bg-black/30 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-zinc-400">Montant à payer</p>
+            {boostOffer && (
+              <div className="mt-5">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={startPaidBoost}
+                  className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {startingPayment
+                    ? "Redirection vers le paiement..."
+                    : `Payer ${formatAmount(boostOffer.amount)} FCFA`}
+                </button>
 
-                    <p className="mt-1 text-xl font-bold text-white">
-                      {formatAmount(Number(payment.amount))} FCFA
-                    </p>
-                  </div>
-
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPaymentStatusClasses(
-                      payment.status,
-                    )}`}
-                  >
-                    {getPaymentStatusLabel(payment.status)}
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-3 text-sm">
-                  <div>
-                    <p className="text-zinc-500">Référence du paiement</p>
-
-                    <p className="mt-1 break-all font-medium text-zinc-200">
-                      {payment.externalReference}
-                    </p>
-                  </div>
-
-                  {payment.customerPhone && (
-                    <div>
-                      <p className="text-zinc-500">Numéro Mobile Money</p>
-
-                      <p className="mt-1 font-medium text-zinc-200">
-                        {payment.customerPhone}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  {payment.provider === "MANUAL"
-                    ? "Vos informations de transaction ont été transmises. Après vérification, votre Boost sera activé au plus tard sous 24 heures."
-                    : "Confirmez la demande Mobile Money sur votre téléphone. Cette page vérifiera automatiquement le paiement et activera votre Boost."}
+                <p className="mt-3 text-center text-xs leading-5 text-zinc-500">
+                  Vous serez redirigé vers la page de paiement sécurisée.
                 </p>
-
-                {(payment.status === "PENDING" ||
-                  payment.status === "PROCESSING") && (
-                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
-                    {payment.provider === "CAMPAY" && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
-                    )}
-
-                    <p className="text-sm text-amber-200">
-                      {payment.provider === "MANUAL"
-                        ? "Paiement en attente de vérification par Ubiza."
-                        : "En attente de la confirmation Mobile Money…"}
-                    </p>
-                  </div>
-                )}
-
-                {(payment.status === "FAILED" ||
-                  payment.status === "CANCELLED" ||
-                  payment.status === "EXPIRED") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPayment(null);
-                      setError("");
-                      setSuccess("");
-                    }}
-                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Réessayer avec un autre paiement
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -523,31 +396,6 @@ export default function BoostCard({ boost, onUpdated }: BoostCardProps) {
       </div>
     </article>
   );
-}
-
-function getPaymentStatusLabel(status: Payment["status"]) {
-  const labels: Record<Payment["status"], string> = {
-    PENDING: "En attente",
-    PROCESSING: "En cours",
-    SUCCESS: "Payé",
-    FAILED: "Échoué",
-    CANCELLED: "Annulé",
-    EXPIRED: "Expiré",
-  };
-
-  return labels[status];
-}
-
-function getPaymentStatusClasses(status: Payment["status"]) {
-  if (status === "SUCCESS") {
-    return "border-emerald-400/20 bg-emerald-400/10 text-emerald-300";
-  }
-
-  if (status === "FAILED" || status === "CANCELLED" || status === "EXPIRED") {
-    return "border-red-400/20 bg-red-400/10 text-red-300";
-  }
-
-  return "border-amber-400/20 bg-amber-400/10 text-amber-300";
 }
 
 function formatAmount(amount: number) {

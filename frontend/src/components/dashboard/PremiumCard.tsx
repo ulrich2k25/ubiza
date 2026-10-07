@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import ManualPaymentForm from "@/components/payments/ManualPaymentForm";
 import { api } from "@/services/api";
 import {
   paymentsService,
-  type Payment,
   type PremiumPlan,
   type PricingResponse,
 } from "@/services/payments.service";
@@ -28,10 +26,10 @@ export default function PremiumCard() {
   const [selectedPlan, setSelectedPlan] = useState<PremiumPlan>("DAYS_7");
 
   const [showPurchase, setShowPurchase] = useState(false);
-  const [payment, setPayment] = useState<Payment | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
+  const [startingPayment, setStartingPayment] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -47,6 +45,7 @@ export default function PremiumCard() {
 
     setPricing(response);
   }
+
   async function startFreeTrial() {
     try {
       setIsStartingTrial(true);
@@ -58,6 +57,7 @@ export default function PremiumCard() {
       });
 
       setPremium(response as PremiumStatus);
+
       setSuccess(
         "Votre essai Premium gratuit de 3 jours est maintenant actif.",
       );
@@ -71,6 +71,7 @@ export default function PremiumCard() {
       setIsStartingTrial(false);
     }
   }
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       Promise.all([loadPremium(), loadPricing()])
@@ -85,83 +86,6 @@ export default function PremiumCard() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const paymentId = payment?.id;
-  const paymentProvider = payment?.provider;
-  const paymentStatus = payment?.status;
-
-  /*
-   * Le polling automatique reste réservé aux paiements CamPay.
-   * Un paiement manuel attend l'approbation de l'administrateur.
-   */
-  useEffect(() => {
-    if (
-      !paymentId ||
-      paymentProvider === "MANUAL" ||
-      paymentStatus === "SUCCESS" ||
-      paymentStatus === "FAILED" ||
-      paymentStatus === "CANCELLED" ||
-      paymentStatus === "EXPIRED"
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const intervalId = window.setInterval(async () => {
-      try {
-        const refreshedPayment = await paymentsService.getOne(paymentId);
-
-        if (cancelled) {
-          return;
-        }
-
-        setPayment(refreshedPayment);
-
-        if (refreshedPayment.status === "SUCCESS") {
-          window.clearInterval(intervalId);
-
-          await loadPremium();
-
-          if (!cancelled) {
-            setSuccess(
-              "Paiement confirmé. Votre abonnement Premium est actif.",
-            );
-            setError("");
-          }
-        }
-
-        if (refreshedPayment.status === "FAILED") {
-          window.clearInterval(intervalId);
-
-          setError(
-            refreshedPayment.failureReason ||
-              "Le paiement Mobile Money a échoué.",
-          );
-          setSuccess("");
-        }
-
-        if (refreshedPayment.status === "CANCELLED") {
-          window.clearInterval(intervalId);
-          setError("Le paiement a été annulé.");
-          setSuccess("");
-        }
-
-        if (refreshedPayment.status === "EXPIRED") {
-          window.clearInterval(intervalId);
-          setError("La demande de paiement a expiré.");
-          setSuccess("");
-        }
-      } catch (err) {
-        console.error("Impossible de vérifier le paiement :", err);
-      }
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [paymentId, paymentProvider, paymentStatus]);
-
   const expirationDate = premium?.premiumActiveUntil
     ? new Intl.DateTimeFormat("fr-FR", {
         day: "numeric",
@@ -173,6 +97,37 @@ export default function PremiumCard() {
   const selectedOffer = pricing?.premium.find(
     (offer) => offer.plan === selectedPlan,
   );
+
+  async function startPaidPremium() {
+    if (!selectedOffer) {
+      setError("Le tarif Premium est indisponible.");
+      return;
+    }
+
+    try {
+      setStartingPayment(true);
+      setError("");
+      setSuccess("");
+
+      const response = await paymentsService.createPremium(selectedPlan);
+
+      const checkoutUrl = response.checkoutUrl?.trim();
+
+      if (!checkoutUrl) {
+        throw new Error("Impossible d'obtenir la page de paiement sécurisée.");
+      }
+
+      window.location.assign(checkoutUrl);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Impossible d'initialiser le paiement.",
+      );
+    } finally {
+      setStartingPayment(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -272,7 +227,7 @@ export default function PremiumCard() {
               <button
                 type="button"
                 onClick={startFreeTrial}
-                disabled={isStartingTrial}
+                disabled={isStartingTrial || startingPayment}
                 className="mt-4 w-full rounded-xl bg-fuchsia-600 px-4 py-3 font-semibold text-white transition hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isStartingTrial
@@ -293,13 +248,13 @@ export default function PremiumCard() {
         {!showPurchase ? (
           <button
             type="button"
+            disabled={startingPayment}
             onClick={() => {
               setShowPurchase(true);
-              setPayment(null);
               setError("");
               setSuccess("");
             }}
-            className="w-full rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-3 font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/20"
+            className="w-full rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 px-4 py-3 font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {premium.isPremium
               ? "Prolonger mon abonnement"
@@ -314,20 +269,18 @@ export default function PremiumCard() {
                   : "Choisir un forfait"}
               </p>
 
-              {!payment && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPurchase(false);
-                    setPayment(null);
-                    setError("");
-                    setSuccess("");
-                  }}
-                  className="text-sm font-medium text-zinc-400 transition hover:text-white"
-                >
-                  Fermer
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={startingPayment}
+                onClick={() => {
+                  setShowPurchase(false);
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-sm font-medium text-zinc-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Fermer
+              </button>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -338,7 +291,7 @@ export default function PremiumCard() {
                   <button
                     key={offer.plan}
                     type="button"
-                    disabled={Boolean(payment)}
+                    disabled={startingPayment}
                     onClick={() => {
                       setSelectedPlan(offer.plan);
                       setError("");
@@ -362,100 +315,22 @@ export default function PremiumCard() {
               })}
             </div>
 
-            {!payment && selectedOffer && (
-              <ManualPaymentForm
-                purpose="PREMIUM"
-                premiumPlan={selectedPlan}
-                amount={selectedOffer.amount}
-                onSubmitted={(submittedPayment, message) => {
-                  setPayment(submittedPayment);
-                  setSuccess(
-                    message ||
-                      "Votre paiement a été envoyé pour vérification. Votre forfait sera activé au plus tard sous 24 heures.",
-                  );
-                  setError("");
-                }}
-              />
-            )}
+            {selectedOffer && (
+              <div className="mt-5">
+                <button
+                  type="button"
+                  disabled={startingPayment}
+                  onClick={startPaidPremium}
+                  className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {startingPayment
+                    ? "Redirection vers le paiement..."
+                    : `Payer ${formatAmount(selectedOffer.amount)} FCFA`}
+                </button>
 
-            {payment && (
-              <div className="mt-5 rounded-xl border border-fuchsia-400/20 bg-black/30 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-zinc-400">
-                      {payment.provider === "MANUAL"
-                        ? "Paiement transmis"
-                        : "Paiement à effectuer"}
-                    </p>
-
-                    <p className="mt-1 text-xl font-bold text-white">
-                      {formatAmount(Number(payment.amount))} FCFA
-                    </p>
-                  </div>
-
-                  <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                    {getPaymentStatusLabel(payment.status)}
-                  </span>
-                </div>
-
-                <div className="mt-4 space-y-3 text-sm">
-                  <div>
-                    <p className="text-zinc-500">Référence Ubiza</p>
-
-                    <p className="mt-1 break-all font-medium text-zinc-200">
-                      {payment.externalReference || "Non disponible"}
-                    </p>
-                  </div>
-
-                  {payment.customerPhone && (
-                    <div>
-                      <p className="text-zinc-500">
-                        Numéro ayant effectué le paiement
-                      </p>
-
-                      <p className="mt-1 font-medium text-zinc-200">
-                        {payment.customerPhone}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <p className="mt-4 text-sm leading-6 text-zinc-400">
-                  {payment.provider === "MANUAL"
-                    ? "Vos informations de transaction ont été transmises. Après vérification, votre abonnement sera activé au plus tard sous 24 heures."
-                    : "Confirmez la demande Mobile Money sur votre téléphone. Cette page vérifiera automatiquement le paiement et activera votre abonnement."}
+                <p className="mt-3 text-center text-xs leading-5 text-zinc-500">
+                  Vous serez redirigé vers la page de paiement sécurisée.
                 </p>
-
-                {(payment.status === "PENDING" ||
-                  payment.status === "PROCESSING") && (
-                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3">
-                    {payment.provider === "CAMPAY" && (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-300/30 border-t-amber-300" />
-                    )}
-
-                    <p className="text-sm text-amber-200">
-                      {payment.provider === "MANUAL"
-                        ? "Paiement en attente de vérification par Ubiza."
-                        : "En attente de la confirmation Mobile Money…"}
-                    </p>
-                  </div>
-                )}
-
-                {(payment.status === "FAILED" ||
-                  payment.status === "CANCELLED" ||
-                  payment.status === "EXPIRED") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPayment(null);
-                      setSuccess("");
-                      setError("");
-                    }}
-                    className="mt-3 w-full rounded-xl border border-white/10 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5"
-                  >
-                    Réessayer avec un autre paiement
-                  </button>
-                )}
               </div>
             )}
           </>
@@ -497,19 +372,6 @@ function getPremiumPlanLabel(plan: PremiumPlan) {
   };
 
   return labels[plan];
-}
-
-function getPaymentStatusLabel(status: Payment["status"]) {
-  const labels: Record<Payment["status"], string> = {
-    PENDING: "En attente",
-    PROCESSING: "En cours",
-    SUCCESS: "Payé",
-    FAILED: "Échoué",
-    CANCELLED: "Annulé",
-    EXPIRED: "Expiré",
-  };
-
-  return labels[status];
 }
 
 function formatAmount(amount: number) {

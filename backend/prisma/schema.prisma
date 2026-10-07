@@ -139,6 +139,7 @@ enum PremiumSubscriptionStatus {
 enum PaymentProvider {
   MANUAL
   CAMPAY
+  PAYMENT_PLATFORM
 }
 
 enum PaymentPurpose {

@@ -14,7 +14,7 @@ export type PaymentStatus =
 
 export interface Payment {
   id: string;
-  provider: "CAMPAY" | "MANUAL";
+  provider: "CAMPAY" | "MANUAL" | "PAYMENT_PLATFORM";
   purpose: "PREMIUM" | "BOOST";
   status: PaymentStatus;
   amount: string;
@@ -43,6 +43,7 @@ export interface CamPayInitiation {
 export interface PaymentResponse {
   message: string;
   payment: Payment;
+  checkoutUrl?: string | null;
   campay?: CamPayInitiation;
 }
 
@@ -89,28 +90,28 @@ export interface RejectManualPaymentResponse {
 export const paymentsService = {
   createPremium(
     premiumPlan: PremiumPlan,
-    customerPhone: string,
+    customerPhone?: string,
   ): Promise<PaymentResponse> {
     return api("/payments", {
       method: "POST",
       body: JSON.stringify({
         purpose: "PREMIUM",
         premiumPlan,
-        customerPhone,
+        customerPhone: customerPhone?.trim() || undefined,
       }),
     });
   },
 
   createBoost(
     boostDuration: BoostDuration,
-    customerPhone: string,
+    customerPhone?: string,
   ): Promise<PaymentResponse> {
     return api("/payments", {
       method: "POST",
       body: JSON.stringify({
         purpose: "BOOST",
         boostDuration,
-        customerPhone,
+        customerPhone: customerPhone?.trim() || undefined,
       }),
     });
   },
