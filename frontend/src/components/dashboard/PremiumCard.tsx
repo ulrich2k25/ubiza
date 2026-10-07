@@ -117,6 +117,11 @@ export default function PremiumCard() {
         throw new Error("Impossible d'obtenir la page de paiement sécurisée.");
       }
 
+      window.localStorage.setItem(
+        "ubiza_pending_payment_id",
+        response.payment.id,
+      );
+
       window.location.assign(checkoutUrl);
     } catch (err) {
       setError(
