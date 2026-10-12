@@ -7,7 +7,7 @@ describe('FavoritesController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [FavoritesController],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     controller = module.get<FavoritesController>(FavoritesController);
   });

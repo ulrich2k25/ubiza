@@ -7,7 +7,7 @@ describe('TrustController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TrustController],
-    }).compile();
+    }).useMocker(() => ({})).compile();
 
     controller = module.get<TrustController>(TrustController);
   });
