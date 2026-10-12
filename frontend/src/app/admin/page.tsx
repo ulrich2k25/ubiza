@@ -53,15 +53,16 @@ export default function AdminPage() {
           </p>
         </Link>
 
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 opacity-60">
+        <Link
+          href="/admin/users"
+          className="rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:border-fuchsia-500 hover:bg-white/10"
+        >
           <div className="text-5xl">👥</div>
-
           <h2 className="mt-5 text-xl font-bold">Utilisateurs</h2>
-
           <p className="mt-2 text-sm text-zinc-400">
-            Disponible prochainement.
+            Consulter les comptes, filtrer et gérer les suspensions.
           </p>
-        </div>
+        </Link>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6 opacity-60">
           <div className="text-5xl">📢</div>

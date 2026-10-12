@@ -79,6 +79,7 @@ export default function AdminLayout({
               >
                 Ambassadeurs
               </Link>
+              <Link href="/admin/users" className="rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10 hover:text-white">Utilisateurs</Link>
             </nav>
           </div>
 
@@ -114,6 +115,7 @@ export default function AdminLayout({
           >
             Ambassadeurs
           </Link>
+          <Link href="/admin/users" className="whitespace-nowrap rounded-lg bg-white/5 px-3 py-2 text-sm">Utilisateurs</Link>
         </nav>
       </header>
 
