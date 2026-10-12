@@ -45,6 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         email: true,
         role: true,
         status: true,
+        deletedAt: true,
       },
     });
 
@@ -56,7 +57,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Votre compte a été suspendu.');
     }
 
-    if (user.status === UserStatus.DELETED) {
+    if (user.deletedAt || user.status === UserStatus.DELETED) {
       throw new UnauthorizedException('Ce compte utilisateur est désactivé.');
     }
 
