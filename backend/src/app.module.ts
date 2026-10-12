@@ -24,12 +24,15 @@ import { PremiumModule } from './premium/premium.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AmbassadorsModule } from './ambassadors/ambassadors.module';
 
+import { AdminUsersModule } from './admin-users/admin-users.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
     ScheduleModule.forRoot(),
+
     PrismaModule,
     AuthModule,
     TrustModule,
@@ -48,6 +51,8 @@ import { AmbassadorsModule } from './ambassadors/ambassadors.module';
     PremiumModule,
     PaymentsModule,
     AmbassadorsModule,
+
+    AdminUsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
