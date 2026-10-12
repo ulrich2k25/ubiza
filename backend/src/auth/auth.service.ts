@@ -127,26 +127,33 @@ export class AuthService {
       throw new BadRequestException('Ce token de vérification a expiré.');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.updateMany({
         where: {
           id: verificationToken.userId,
+          status: {
+            in: ['PENDING_VERIFICATION', 'ACTIVE'],
+          },
         },
         data: {
           emailVerifiedAt: new Date(),
           status: 'ACTIVE',
         },
-      }),
+      });
 
-      this.prisma.verificationToken.update({
+      if (updatedUser.count !== 1) {
+        throw new BadRequestException('Ce compte ne peut pas être vérifié.');
+      }
+
+      await tx.verificationToken.update({
         where: {
           id: verificationToken.id,
         },
         data: {
           usedAt: new Date(),
         },
-      }),
-    ]);
+      });
+    });
 
     await this.profileService.refreshVerificationStatus(
       verificationToken.userId,
@@ -445,6 +452,13 @@ export class AuthService {
       throw new UnauthorizedException(
         'Email, pseudo ou mot de passe incorrect.',
       );
+    }
+    if (user.status === 'SUSPENDED') {
+      throw new UnauthorizedException('Votre compte a été suspendu.');
+    }
+
+    if (user.status === 'DELETED') {
+      throw new UnauthorizedException('Ce compte utilisateur est désactivé.');
     }
 
     const passwordIsValid = await bcrypt.compare(
