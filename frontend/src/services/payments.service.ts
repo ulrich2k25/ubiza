@@ -2,7 +2,6 @@ import { api } from "@/services/api";
 
 export type PremiumPlan = "DAY_1" | "DAYS_7" | "DAYS_30";
 export type BoostDuration = "MINUTES_60";
-export type ManualPaymentOperator = "MTN" | "ORANGE";
 
 export type PaymentStatus =
   | "PENDING"
@@ -12,9 +11,11 @@ export type PaymentStatus =
   | "CANCELLED"
   | "EXPIRED";
 
+export type PaymentProvider = "CAMPAY" | "MANUAL" | "PAYMENT_PLATFORM";
+
 export interface Payment {
   id: string;
-  provider: "CAMPAY" | "MANUAL" | "PAYMENT_PLATFORM";
+  provider: PaymentProvider;
   purpose: "PREMIUM" | "BOOST";
   status: PaymentStatus;
   amount: string;
@@ -59,13 +60,22 @@ export interface PricingResponse {
   }[];
 }
 
-export interface AdminManualPayment extends Payment {
+export interface AdminPayment extends Payment {
   providerData: {
     description?: string;
     premiumPlan?: PremiumPlan | null;
     boostDurationMinutes?: number | null;
+
+    paymentPlatform?: {
+      paymentId?: string | null;
+      provider?: string | null;
+      providerReference?: string | null;
+      checkoutUrl?: string | null;
+      status?: string | null;
+    };
+
     manualPayment?: {
-      operator?: ManualPaymentOperator;
+      operator?: string;
       payerPhone?: string;
       transactionReference?: string;
       submittedAt?: string;
@@ -78,13 +88,6 @@ export interface AdminManualPayment extends Payment {
     id: string;
     email: string;
   };
-}
-
-export interface RejectManualPaymentResponse {
-  message: string;
-  paymentId: string;
-  status: "FAILED";
-  failureReason: string;
 }
 
 export const paymentsService = {
@@ -116,66 +119,10 @@ export const paymentsService = {
     });
   },
 
-  createManualPremium(
-    premiumPlan: PremiumPlan,
-    operator: ManualPaymentOperator,
-    payerPhone: string,
-    transactionReference: string,
-  ): Promise<PaymentResponse> {
-    return api("/payments/manual", {
-      method: "POST",
-      body: JSON.stringify({
-        purpose: "PREMIUM",
-        premiumPlan,
-        operator,
-        payerPhone,
-        transactionReference,
-      }),
-    });
-  },
-
-  createManualBoost(
-    boostDuration: BoostDuration,
-    operator: ManualPaymentOperator,
-    payerPhone: string,
-    transactionReference: string,
-  ): Promise<PaymentResponse> {
-    return api("/payments/manual", {
-      method: "POST",
-      body: JSON.stringify({
-        purpose: "BOOST",
-        boostDuration,
-        operator,
-        payerPhone,
-        transactionReference,
-      }),
-    });
-  },
-
-  getManualPaymentsForAdmin(
-    status?: PaymentStatus,
-  ): Promise<AdminManualPayment[]> {
+  getPaymentsForAdmin(status?: PaymentStatus): Promise<AdminPayment[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
 
     return api(`/admin/payments${query}`);
-  },
-
-  approveManualPayment(paymentId: string) {
-    return api(`/admin/payments/${paymentId}/approve`, {
-      method: "PATCH",
-    });
-  },
-
-  rejectManualPayment(
-    paymentId: string,
-    reason: string,
-  ): Promise<RejectManualPaymentResponse> {
-    return api(`/admin/payments/${paymentId}/reject`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        reason,
-      }),
-    });
   },
 
   getPricing(): Promise<PricingResponse> {

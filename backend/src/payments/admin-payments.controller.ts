@@ -1,9 +1,6 @@
 import {
-  Body,
   Controller,
   Get,
-  Param,
-  Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -23,16 +20,6 @@ export class AdminPaymentsController {
 
   @Get()
   findAll(@Query('status') status?: PaymentStatus) {
-    return this.paymentsService.findAllManualPaymentsForAdmin(status);
-  }
-
-  @Patch(':id/approve')
-  approve(@Param('id') id: string) {
-    return this.paymentsService.approveManualPayment(id);
-  }
-
-  @Patch(':id/reject')
-  reject(@Param('id') id: string, @Body('reason') reason?: string) {
-    return this.paymentsService.rejectManualPayment(id, reason);
+    return this.paymentsService.findAllPaymentsForAdmin(status);
   }
 }

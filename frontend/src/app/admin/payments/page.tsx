@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   paymentsService,
-  type AdminManualPayment,
+  type AdminPayment,
+  type PaymentProvider,
   type PaymentStatus,
 } from "@/services/payments.service";
 
@@ -14,28 +15,27 @@ const filters: Array<{
   value: PaymentFilter;
   label: string;
 }> = [
-  { value: "PENDING", label: "En attente" },
-  { value: "SUCCESS", label: "Validés" },
-  { value: "FAILED", label: "Refusés" },
   { value: "ALL", label: "Tous" },
+  { value: "PENDING", label: "En attente" },
+  { value: "PROCESSING", label: "En cours" },
+  { value: "SUCCESS", label: "Réussis" },
+  { value: "FAILED", label: "Échoués" },
+  { value: "CANCELLED", label: "Annulés" },
+  { value: "EXPIRED", label: "Expirés" },
 ];
 
 export default function AdminPaymentsPage() {
-  const [payments, setPayments] = useState<AdminManualPayment[]>([]);
-  const [filter, setFilter] = useState<PaymentFilter>("PENDING");
-
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [filter, setFilter] = useState<PaymentFilter>("ALL");
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<string | null>(null);
-
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   const loadPayments = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
 
-      const response = await paymentsService.getManualPaymentsForAdmin(
+      const response = await paymentsService.getPaymentsForAdmin(
         filter === "ALL" ? undefined : filter,
       );
 
@@ -44,7 +44,7 @@ export default function AdminPaymentsPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Impossible de charger les paiements manuels.",
+          : "Impossible de charger l’historique des paiements.",
       );
     } finally {
       setLoading(false);
@@ -59,81 +59,15 @@ export default function AdminPaymentsPage() {
     return () => window.clearTimeout(timer);
   }, [loadPayments]);
 
-  async function approvePayment(payment: AdminManualPayment) {
-    const confirmed = window.confirm(
-      `Confirmer la réception de ${formatAmount(
-        Number(payment.amount),
-      )} FCFA pour ${payment.user.email} ?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setProcessingId(payment.id);
-      setError("");
-      setSuccess("");
-
-      await paymentsService.approveManualPayment(payment.id);
-
-      setSuccess("Paiement validé. Le forfait de l’utilisateur a été activé.");
-
-      await loadPayments();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de valider ce paiement.",
-      );
-    } finally {
-      setProcessingId(null);
-    }
-  }
-
-  async function rejectPayment(payment: AdminManualPayment) {
-    const reason = window.prompt(
-      "Indique la raison du refus :",
-      "Transaction introuvable ou informations incorrectes.",
-    );
-
-    if (reason === null) {
-      return;
-    }
-
-    if (reason.trim().length < 3) {
-      setError("La raison du refus doit contenir au moins 3 caractères.");
-      return;
-    }
-
-    try {
-      setProcessingId(payment.id);
-      setError("");
-      setSuccess("");
-
-      await paymentsService.rejectManualPayment(payment.id, reason.trim());
-
-      setSuccess("Le paiement a été refusé.");
-
-      await loadPayments();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de refuser ce paiement.",
-      );
-    } finally {
-      setProcessingId(null);
-    }
-  }
-
   return (
     <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8">
       <div className="mb-8">
-        <h1 className="text-4xl font-black text-white">Paiements manuels</h1>
+        <h1 className="text-4xl font-black text-white">Paiements</h1>
 
-        <p className="mt-3 text-zinc-400">
-          Vérifiez les transactions Mobile Money avant d’activer les forfaits.
+        <p className="mt-3 max-w-3xl text-zinc-400">
+          Historique des transactions Ubiza. Les paiements sont synchronisés
+          automatiquement avec la plateforme de paiement et ne peuvent pas être
+          modifiés depuis cette page.
         </p>
       </div>
 
@@ -145,7 +79,6 @@ export default function AdminPaymentsPage() {
             onClick={() => {
               setFilter(item.value);
               setError("");
-              setSuccess("");
             }}
             className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
               filter === item.value
@@ -173,138 +106,131 @@ export default function AdminPaymentsPage() {
         </div>
       )}
 
-      {success && (
-        <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-          <p className="text-sm text-emerald-200">{success}</p>
-        </div>
-      )}
-
       {loading ? (
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <p className="text-zinc-400">Chargement des paiements manuels...</p>
+          <p className="text-zinc-400">Chargement des paiements...</p>
         </div>
       ) : payments.length === 0 ? (
         <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
           <p className="text-zinc-400">
-            Aucun paiement manuel dans cette catégorie.
+            Aucun paiement dans cette catégorie.
           </p>
         </div>
       ) : (
         <div className="grid gap-5">
-          {payments.map((payment) => {
-            const manualData = payment.providerData?.manualPayment;
-            const isPending =
-              payment.status === "PENDING" || payment.status === "PROCESSING";
-            const isProcessing = processingId === payment.id;
-
-            return (
-              <article
-                key={payment.id}
-                className="rounded-3xl border border-white/10 bg-white/5 p-6"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
+          {payments.map((payment) => (
+            <article
+              key={payment.id}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm text-zinc-500">
                       {payment.user.email}
                     </p>
 
-                    <h2 className="mt-1 text-xl font-bold text-white">
-                      {getPurchaseLabel(payment)}
-                    </h2>
-
-                    <p className="mt-2 text-2xl font-black text-fuchsia-300">
-                      {formatAmount(Number(payment.amount))}{" "}
-                      {payment.currency.code}
-                    </p>
+                    <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-zinc-300">
+                      {getProviderLabel(payment.provider)}
+                    </span>
                   </div>
 
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                      payment.status,
-                    )}`}
-                  >
-                    {getStatusLabel(payment.status)}
-                  </span>
+                  <h2 className="mt-2 text-xl font-bold text-white">
+                    {getPurchaseLabel(payment)}
+                  </h2>
+
+                  <p className="mt-2 text-2xl font-black text-fuchsia-300">
+                    {formatAmount(Number(payment.amount))}{" "}
+                    {payment.currency.code}
+                  </p>
                 </div>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <PaymentDetail
-                    label="Opérateur"
-                    value={manualData?.operator || "Non renseigné"}
-                  />
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                    payment.status,
+                  )}`}
+                >
+                  {getStatusLabel(payment.status)}
+                </span>
+              </div>
 
-                  <PaymentDetail
-                    label="Numéro payeur"
-                    value={
-                      manualData?.payerPhone ||
-                      payment.customerPhone ||
-                      "Non renseigné"
-                    }
-                  />
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <PaymentDetail
+                  label="Provider"
+                  value={getProviderLabel(payment.provider)}
+                />
 
-                  <PaymentDetail
-                    label="Référence transaction"
-                    value={
-                      manualData?.transactionReference ||
-                      payment.providerTransactionId ||
-                      "Non renseignée"
-                    }
-                  />
+                <PaymentDetail
+                  label="Téléphone"
+                  value={payment.customerPhone || "Non renseigné"}
+                />
 
-                  <PaymentDetail
-                    label="Date d’envoi"
-                    value={formatDate(
-                      manualData?.submittedAt || payment.createdAt,
-                    )}
-                  />
+                <PaymentDetail
+                  label="Référence Ubiza"
+                  value={payment.externalReference || "Non disponible"}
+                />
 
-                  <PaymentDetail
-                    label="Référence Ubiza"
-                    value={payment.externalReference || "Non disponible"}
-                  />
+                <PaymentDetail
+                  label="ID provider / Payment Platform"
+                  value={
+                    payment.providerTransactionId ||
+                    payment.providerData?.paymentPlatform?.paymentId ||
+                    "Non disponible"
+                  }
+                />
 
-                  <PaymentDetail
-                    label="Identifiant paiement"
-                    value={payment.id}
-                  />
+                <PaymentDetail
+                  label="Référence provider"
+                  value={
+                    payment.providerData?.paymentPlatform?.providerReference ||
+                    payment.providerData?.manualPayment?.transactionReference ||
+                    "Non disponible"
+                  }
+                />
+
+                <PaymentDetail
+                  label="Identifiant paiement Ubiza"
+                  value={payment.id}
+                />
+
+                <PaymentDetail
+                  label="Créé le"
+                  value={formatDate(payment.createdAt)}
+                />
+
+                <PaymentDetail
+                  label="Initié le"
+                  value={formatDate(payment.initiatedAt)}
+                />
+
+                <PaymentDetail
+                  label="Payé le"
+                  value={formatOptionalDate(payment.paidAt)}
+                />
+              </div>
+
+              {payment.failureReason && (
+                <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
+                    Motif d’échec
+                  </p>
+
+                  <p className="mt-2 text-sm text-red-100">
+                    {payment.failureReason}
+                  </p>
                 </div>
+              )}
 
-                {payment.failureReason && (
-                  <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-red-300">
-                      Raison du refus
-                    </p>
-
-                    <p className="mt-2 text-sm text-red-100">
-                      {payment.failureReason}
-                    </p>
-                  </div>
-                )}
-
-                {isPending && (
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => void approvePayment(payment)}
-                      className="rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isProcessing ? "Traitement..." : "Valider le paiement"}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isProcessing}
-                      onClick={() => void rejectPayment(payment)}
-                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Refuser le paiement
-                    </button>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+              {payment.provider === "MANUAL" && (
+                <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+                  <p className="text-sm text-amber-100">
+                    Ancien paiement manuel conservé uniquement pour
+                    l’historique.
+                  </p>
+                </div>
+              )}
+            </article>
+          ))}
         </div>
       )}
     </main>
@@ -325,7 +251,7 @@ function PaymentDetail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function getPurchaseLabel(payment: AdminManualPayment) {
+function getPurchaseLabel(payment: AdminPayment) {
   if (payment.purpose === "BOOST") {
     const duration = payment.providerData?.boostDurationMinutes;
 
@@ -351,12 +277,22 @@ function getPurchaseLabel(payment: AdminManualPayment) {
   return "Abonnement Premium";
 }
 
+function getProviderLabel(provider: PaymentProvider) {
+  const labels: Record<PaymentProvider, string> = {
+    PAYMENT_PLATFORM: "Payment Platform / Fapshi",
+    MANUAL: "Manuel — historique",
+    CAMPAY: "CamPay",
+  };
+
+  return labels[provider];
+}
+
 function getStatusLabel(status: PaymentStatus) {
   const labels: Record<PaymentStatus, string> = {
     PENDING: "En attente",
     PROCESSING: "En cours",
-    SUCCESS: "Validé",
-    FAILED: "Refusé",
+    SUCCESS: "Réussi",
+    FAILED: "Échoué",
     CANCELLED: "Annulé",
     EXPIRED: "Expiré",
   };
@@ -389,4 +325,8 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatOptionalDate(value?: string | null) {
+  return value ? formatDate(value) : "Non disponible";
 }
