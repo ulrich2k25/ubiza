@@ -33,10 +33,10 @@ export default function AdminPage() {
         >
           <div className="text-5xl">💳</div>
 
-          <h2 className="mt-5 text-xl font-bold">Paiements manuels</h2>
+          <h2 className="mt-5 text-xl font-bold">Paiements</h2>
 
           <p className="mt-2 text-sm text-zinc-400">
-            Vérifier, valider ou refuser les paiements Mobile Money.
+            Consulter les paiements et leur statut.
           </p>
         </Link>
 

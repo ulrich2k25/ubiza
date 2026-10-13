@@ -64,11 +64,6 @@ export default function AdminPaymentsPage() {
       <div className="mb-8">
         <h1 className="text-4xl font-black text-white">Paiements</h1>
 
-        <p className="mt-3 max-w-3xl text-zinc-400">
-          Historique des transactions Ubiza. Les paiements sont synchronisés
-          automatiquement avec la plateforme de paiement et ne peuvent pas être
-          modifiés depuis cette page.
-        </p>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-3">
