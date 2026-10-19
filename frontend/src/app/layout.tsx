@@ -17,8 +17,44 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://getubiza.com"),
+
   title: "Ubiza",
   description: "Découvrez des profils près de vous",
+
+  openGraph: {
+    title: "Ubiza",
+    description: "Découvrez des profils près de vous",
+    url: "https://getubiza.com",
+    siteName: "Ubiza",
+    locale: "fr_FR",
+    type: "website",
+    images: [
+      {
+        url: "/ubiza-og.png",
+        width: 1200,
+        height: 630,
+        alt: "Ubiza",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "Ubiza",
+    description: "Découvrez des profils près de vous",
+    images: ["/ubiza-og.png"],
+  },
+
+  icons: {
+    icon: [
+      {
+        url: "/ubiza-icon.png",
+        type: "image/png",
+      },
+    ],
+    apple: "/ubiza-apple-icon.png",
+  },
 };
 
 export default function RootLayout({
