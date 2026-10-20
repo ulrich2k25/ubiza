@@ -182,6 +182,12 @@ export class PaymentsService {
                   select: { email: true },
                 })
               ).email,
+              customerName: (
+                await this.prisma.profile.findUnique({
+                  where: { userId },
+                  select: { displayName: true },
+                })
+              )?.displayName?.trim() || 'Client UBIZA',
             }
           : {}),
       });
