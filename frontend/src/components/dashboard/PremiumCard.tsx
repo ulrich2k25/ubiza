@@ -31,6 +31,7 @@ export default function PremiumCard() {
   const [loading, setLoading] = useState(true);
   const [isStartingTrial, setIsStartingTrial] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
+  const [showProviderPicker, setShowProviderPicker] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -323,7 +324,9 @@ export default function PremiumCard() {
 
             {selectedOffer && (
               <div className="mt-5">
-                <fieldset className="mb-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                {showProviderPicker && (
+
+                  <fieldset className="mb-4 rounded-xl border border-white/10 bg-black/20 p-4">
                 <legend className="px-2 text-sm font-semibold text-white">Moyen de paiement</legend>
                 <div className="mt-2 grid grid-cols-2 gap-3">
                   {(["FAPSHI", "SASPAY"] as const).map((option) => (
@@ -334,14 +337,24 @@ export default function PremiumCard() {
                   ))}
                 </div>
               </fieldset>
+
+                )}
   <button
     type="button"
     disabled={startingPayment}
-    onClick={startPaidPremium}
+    onClick={() => {
+                    if (!showProviderPicker) {
+                      setShowProviderPicker(true);
+                      return;
+                    }
+                    void startPaidPremium();
+                  }}
                   className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {startingPayment
                     ? "Redirection vers le paiement..."
+                     : showProviderPicker
+                       ? "Confirmer le paiement"
                     : `Payer ${formatAmount(selectedOffer.amount)} FCFA`}
                 </button>
 
