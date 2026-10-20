@@ -104,16 +104,6 @@ export class PaymentPlatformWebhookController {
     timestamp: string,
     signature: string,
   ) {
-    const secret = this.configService
-      .get<string>('PAYMENT_PLATFORM_WEBHOOK_SECRET')
-      ?.trim();
-
-    if (!secret) {
-      throw new UnauthorizedException(
-        'Le secret webhook Payment Platform est absent.',
-      );
-    }
-
     const prefix = 'sha256=';
 
     if (!signature.startsWith(prefix)) {
@@ -126,19 +116,43 @@ export class PaymentPlatformWebhookController {
       throw new UnauthorizedException('Signature webhook invalide.');
     }
 
+    const fapshiSecret = this.configService
+      .get<string>('PAYMENT_PLATFORM_WEBHOOK_SECRET')
+      ?.trim();
+
+    const saspaySecret = this.configService
+      .get<string>('PAYMENT_PLATFORM_SASPAY_WEBHOOK_SECRET')
+      ?.trim();
+
+    const secrets = [fapshiSecret, saspaySecret].filter(
+      (secret): secret is string => Boolean(secret),
+    );
+
+    if (secrets.length === 0) {
+      throw new UnauthorizedException(
+        'Aucun secret webhook Payment Platform configuré.',
+      );
+    }
+
     const signedPayload = `${timestamp}.${rawBody.toString('utf8')}`;
-
-    const expectedHex = createHmac('sha256', secret)
-      .update(signedPayload)
-      .digest('hex');
-
     const received = Buffer.from(receivedHex, 'hex');
-    const expected = Buffer.from(expectedHex, 'hex');
 
-    if (
-      received.length !== expected.length ||
-      !timingSafeEqual(received, expected)
-    ) {
+    let validSignature = false;
+
+    for (const secret of secrets) {
+      const expected = createHmac('sha256', secret)
+        .update(signedPayload)
+        .digest();
+
+      if (
+        received.length === expected.length &&
+        timingSafeEqual(received, expected)
+      ) {
+        validSignature = true;
+      }
+    }
+
+    if (!validSignature) {
       throw new UnauthorizedException('Signature webhook invalide.');
     }
   }
