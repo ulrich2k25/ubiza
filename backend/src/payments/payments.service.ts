@@ -172,7 +172,8 @@ export class PaymentsService {
       platformPayment = await this.paymentPlatformService.createPayment({
         amount: price.amount,
         reference: payment.externalReference,
-        idempotencyKey: payment.id,
+$1idempotencyKey: payment.id,
+$1provider: dto.provider ?? 'FAPSHI',
       });
     } catch (error) {
       await this.prisma.payment.update({

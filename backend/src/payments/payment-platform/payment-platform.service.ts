@@ -28,6 +28,7 @@ export interface CreatePaymentPlatformPaymentInput {
   amount: number;
   reference: string;
   idempotencyKey: string;
+  provider?: 'FAPSHI' | 'SASPAY';
 }
 
 @Injectable()
@@ -48,7 +49,7 @@ export class PaymentPlatformService {
         amount: input.amount,
         currency: 'XAF',
         method: 'MOBILE_MONEY',
-        provider: 'FAPSHI',
+        provider: input.provider ?? 'FAPSHI',
         reference: input.reference,
       }),
     });

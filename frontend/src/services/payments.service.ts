@@ -2,6 +2,7 @@ import { api } from "@/services/api";
 
 export type PremiumPlan = "DAY_1" | "DAYS_7" | "DAYS_30";
 export type BoostDuration = "MINUTES_60";
+export type CheckoutProvider = "FAPSHI" | "SASPAY";
 
 export type PaymentStatus =
   | "PENDING"
@@ -94,6 +95,7 @@ export const paymentsService = {
   createPremium(
     premiumPlan: PremiumPlan,
     customerPhone?: string,
+    provider: CheckoutProvider = "FAPSHI",
   ): Promise<PaymentResponse> {
     return api("/payments", {
       method: "POST",
@@ -101,6 +103,7 @@ export const paymentsService = {
         purpose: "PREMIUM",
         premiumPlan,
         customerPhone: customerPhone?.trim() || undefined,
+        provider,
       }),
     });
   },
@@ -108,6 +111,7 @@ export const paymentsService = {
   createBoost(
     boostDuration: BoostDuration,
     customerPhone?: string,
+    provider: CheckoutProvider = "FAPSHI",
   ): Promise<PaymentResponse> {
     return api("/payments", {
       method: "POST",
@@ -115,10 +119,10 @@ export const paymentsService = {
         purpose: "BOOST",
         boostDuration,
         customerPhone: customerPhone?.trim() || undefined,
+        provider,
       }),
     });
   },
-
   getPaymentsForAdmin(status?: PaymentStatus): Promise<AdminPayment[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : "";
 

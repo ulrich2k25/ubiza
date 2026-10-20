@@ -6,6 +6,7 @@ import { api } from "@/services/api";
 import {
   paymentsService,
   type PremiumPlan,
+  type CheckoutProvider,
   type PricingResponse,
 } from "@/services/payments.service";
 
@@ -22,8 +23,8 @@ interface PremiumStatus {
 export default function PremiumCard() {
   const [premium, setPremium] = useState<PremiumStatus | null>(null);
   const [pricing, setPricing] = useState<PricingResponse | null>(null);
-
-  const [selectedPlan, setSelectedPlan] = useState<PremiumPlan>("DAYS_7");
+  const [selectedPlan, setSelectedPlan] = useState<PremiumPlan>("DAYS_7",);
+  const [selectedProvider, setSelectedProvider] = useState<CheckoutProvider>("SASPAY");
 
   const [showPurchase, setShowPurchase] = useState(false);
 
@@ -109,7 +110,7 @@ export default function PremiumCard() {
       setError("");
       setSuccess("");
 
-      const response = await paymentsService.createPremium(selectedPlan);
+      const response = await paymentsService.createPremium(selectedPlan, undefined, selectedProvider);
 
       const checkoutUrl = response.checkoutUrl?.trim();
 
@@ -322,10 +323,21 @@ export default function PremiumCard() {
 
             {selectedOffer && (
               <div className="mt-5">
-                <button
-                  type="button"
-                  disabled={startingPayment}
-                  onClick={startPaidPremium}
+                <fieldset className="mb-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                <legend className="px-2 text-sm font-semibold text-white">Moyen de paiement</legend>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  {(["FAPSHI", "SASPAY"] as const).map((option) => (
+                    <label key={option} className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition ${selectedProvider === option ? "border-fuchsia-400 bg-fuchsia-500/15 text-white" : "border-white/10 bg-white/5 text-zinc-300"}`}>
+                      <input type="radio" name="premium-payment-provider" value={option} checked={selectedProvider === option} disabled={startingPayment} onChange={() => setSelectedProvider(option)} className="accent-fuchsia-500" />
+                      {option === "FAPSHI" ? "Fapshi" : "SasPay"}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+  <button
+    type="button"
+    disabled={startingPayment}
+    onClick={startPaidPremium}
                   className="w-full rounded-xl bg-gradient-to-r from-fuchsia-500 to-violet-600 px-5 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {startingPayment

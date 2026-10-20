@@ -15,6 +15,11 @@ export enum PurchasableBoostDuration {
   MINUTES_60 = 'MINUTES_60',
 }
 
+export enum CheckoutProvider {
+  FAPSHI = 'FAPSHI',
+  SASPAY = 'SASPAY',
+}
+
 export class InitiatePaymentDto {
   @IsEnum(InitiatePaymentPurpose)
   purpose!: InitiatePaymentPurpose;
@@ -33,4 +38,8 @@ export class InitiatePaymentDto {
     message: 'Le numéro de téléphone est invalide.',
   })
   customerPhone?: string;
+
+  @IsOptional()
+  @IsEnum(CheckoutProvider)
+  provider?: CheckoutProvider;
 }
