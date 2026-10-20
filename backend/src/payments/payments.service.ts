@@ -174,6 +174,16 @@ export class PaymentsService {
         reference: payment.externalReference,
         idempotencyKey: payment.id,
         provider: dto.provider ?? 'FAPSHI',
+        ...(dto.provider === 'SASPAY'
+          ? {
+              customerEmail: (
+                await this.prisma.user.findUniqueOrThrow({
+                  where: { id: userId },
+                  select: { email: true },
+                })
+              ).email,
+            }
+          : {}),
       });
     } catch (error) {
       await this.prisma.payment.update({

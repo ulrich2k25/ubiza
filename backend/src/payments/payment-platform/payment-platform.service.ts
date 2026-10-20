@@ -29,6 +29,7 @@ export interface CreatePaymentPlatformPaymentInput {
   reference: string;
   idempotencyKey: string;
   provider?: 'FAPSHI' | 'SASPAY';
+  customerEmail?: string;
 }
 
 @Injectable()
@@ -51,6 +52,9 @@ export class PaymentPlatformService {
         method: 'MOBILE_MONEY',
         provider: input.provider ?? 'FAPSHI',
         reference: input.reference,
+        ...(input.provider === 'SASPAY'
+          ? { customerEmail: input.customerEmail }
+          : {}),
       }),
     }, input.provider === 'SASPAY' ? 'SASPAY' : 'FAPSHI');
 
