@@ -52,7 +52,7 @@ export class PaymentPlatformService {
         provider: input.provider ?? 'FAPSHI',
         reference: input.reference,
       }),
-    });
+    }, input.provider === 'SASPAY' ? 'SASPAY' : 'FAPSHI');
 
     if (!payment.id) {
       throw new BadGatewayException(
@@ -80,9 +80,13 @@ export class PaymentPlatformService {
     );
   }
 
-  private async request<T>(endpoint: string, options: RequestInit): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit, provider: 'FAPSHI' | 'SASPAY' = 'FAPSHI'): Promise<T> {
     const baseUrl = this.getRequiredConfig('PAYMENT_PLATFORM_BASE_URL');
-    const apiKey = this.getRequiredConfig('PAYMENT_PLATFORM_API_KEY');
+    const apiKey = this.getRequiredConfig(
+      provider === 'SASPAY'
+        ? 'PAYMENT_PLATFORM_SASPAY_API_KEY'
+        : 'PAYMENT_PLATFORM_API_KEY',
+    );
 
     const url = `${baseUrl.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
 
