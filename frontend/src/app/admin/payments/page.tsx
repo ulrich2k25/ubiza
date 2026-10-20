@@ -126,7 +126,7 @@ export default function AdminPaymentsPage() {
                     </p>
 
                     <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs font-semibold text-zinc-300">
-                      {getProviderLabel(payment.provider)}
+                      {getProviderLabel(payment)}
                     </span>
                   </div>
 
@@ -152,7 +152,7 @@ export default function AdminPaymentsPage() {
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <PaymentDetail
                   label="Provider"
-                  value={getProviderLabel(payment.provider)}
+                  value={getProviderLabel(payment)}
                 />
 
                 <PaymentDetail
@@ -272,14 +272,27 @@ function getPurchaseLabel(payment: AdminPayment) {
   return "Abonnement Premium";
 }
 
-function getProviderLabel(provider: PaymentProvider) {
-  const labels: Record<PaymentProvider, string> = {
-    PAYMENT_PLATFORM: "Payment Platform / Fapshi",
+function getProviderLabel(payment: AdminPayment) {
+  if (payment.provider === "PAYMENT_PLATFORM") {
+    const provider = payment.providerData?.paymentPlatform?.provider?.toUpperCase();
+
+    if (provider === "FAPSHI") {
+      return "Payment Platform / Fapshi";
+    }
+
+    if (provider === "SASPAY") {
+      return "Payment Platform / SasPay";
+    }
+
+    return "Payment Platform";
+  }
+
+  const labels: Record<Exclude<PaymentProvider, "PAYMENT_PLATFORM">, string> = {
     MANUAL: "Manuel — historique",
     CAMPAY: "CamPay",
   };
 
-  return labels[provider];
+  return labels[payment.provider];
 }
 
 function getStatusLabel(status: PaymentStatus) {
